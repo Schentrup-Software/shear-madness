@@ -6,6 +6,7 @@ import { addTournament, getTournament, getTournamentsByOwner } from "../backend/
 export function Welcome() {
   const navigate = useNavigate();
   const [tournamentName, setTournamentName] = useState("");
+  const [boardCount, setBoardCount] = useState(1);
   const [existingTournaments, setExistingTournaments] = useState<any[]>([]);
 
   useEffect(() => {
@@ -25,7 +26,7 @@ export function Welcome() {
     e.preventDefault();
     if (tournamentName.trim()) {
       try {
-        const tournament = await addTournament(tournamentName);
+        const tournament = await addTournament(tournamentName, boardCount);
         navigate(`/tournament?id=${tournament.id}`);
       } catch (error) {
         console.error("Failed to save tournament:", error);
@@ -58,6 +59,20 @@ export function Welcome() {
                 onChange={(e) => setTournamentName(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 placeholder="Enter tournament name"
+                required
+              />
+            </div>
+            <div className="space-y-3">
+              <label htmlFor="boardCount" className="block text-xl font-bold text-gray-800 dark:text-gray-100 text-center">
+                Number of Boards
+              </label>
+              <input
+                type="number"
+                id="boardCount"
+                value={boardCount}
+                min={1}
+                onChange={(e) => setBoardCount(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 required
               />
             </div>

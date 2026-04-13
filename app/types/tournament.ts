@@ -15,4 +15,5 @@ export interface Match {
   team2: Team | null;
   winningTeam: 1 | 2 | null | 0;
   round: number;
+  status: 'waiting' | 'active' | 'completed';
 }
