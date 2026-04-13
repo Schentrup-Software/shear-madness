@@ -60,14 +60,14 @@ export default function Tournament() {
           <div>
             <button
               onClick={handleStartTournament}
-              disabled={players.length < 2 || players.length % 2 === 1}
+              disabled={players.length < 4 || players.length % 2 === 1}
               className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg transition-colors shadow-lg"
             >
               Start Tournament
             </button>
-            {players.length < 2 && (
+            {players.length < 4 && (
               <p className="mt-2 text-sm text-red-500 dark:text-gray-400">
-                At least 2 players are required to start the tournament
+                At least 4 players are required to start the tournament
               </p>
             )}
             {players.length % 2 === 1 && (

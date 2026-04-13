@@ -5,6 +5,8 @@ interface BracketProps {
     isLoading: boolean;
     isReadOnly?: boolean;
     onSelectWinner?: (matchId: string, teamNumber: 1 | 2) => void;
+    onStartMatch?: (matchId: string) => void;
+    canStartMatch?: boolean;
     stickyHeaderBg?: string;
 }
 
@@ -13,6 +15,8 @@ export default function Bracket({
     isLoading,
     isReadOnly = false,
     onSelectWinner,
+    onStartMatch,
+    canStartMatch = false,
     stickyHeaderBg = 'bg-gray-50 dark:bg-gray-900'
 }: BracketProps) {
     const getRoundMatches = (round: number) => {
@@ -31,8 +35,8 @@ export default function Bracket({
         : null;
 
     const handleTeamClick = (matchId: string, teamNumber: 1 | 2, match: Match) => {
-        // Only allow clicking if not read-only, no winner selected, and callback provided
-        if (!isReadOnly && !match.winningTeam && onSelectWinner) {
+        // Only allow clicking if not read-only, match is active, no winner selected, and callback provided
+        if (!isReadOnly && match.status === 'active' && !match.winningTeam && onSelectWinner) {
             onSelectWinner(matchId, teamNumber);
         }
     };
@@ -80,8 +84,24 @@ export default function Bracket({
                                             marginTop: round > 1 ? `${idx * (100 / roundMatches.length)}%` : '0'
                                         }}
                                     >
-                                        <div className="text-center text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3">
-                                            Match {idx + 1}
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">
+                                                Match {idx + 1}
+                                            </span>
+                                            {match.status === 'active' && (
+                                                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
+                                                    Active
+                                                </span>
+                                            )}
+                                            {match.status === 'waiting' && match.team2 && !isReadOnly && onStartMatch && (
+                                                <button
+                                                    onClick={() => onStartMatch(match.id)}
+                                                    disabled={!canStartMatch}
+                                                    className="px-2 py-0.5 rounded text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    Start
+                                                </button>
+                                            )}
                                         </div>
 
                                         {/* Team 1 */}
@@ -90,12 +110,12 @@ export default function Bracket({
                                                 onClick={() => handleTeamClick(match.id, 1, match)}
                                                 className={`p-3 mb-3 rounded-lg transition-all ${match.winningTeam === 1
                                                         ? 'bg-green-500 text-white font-bold shadow-lg scale-105'
-                                                        : match.team2 && !isReadOnly
+                                                        : match.team2 && !isReadOnly && match.status === 'active'
                                                             ? 'cursor-pointer bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 dark:hover:bg-blue-800 border-2 border-blue-300 dark:border-blue-700'
-                                                            : match.team2 && isReadOnly
+                                                            : match.team2
                                                                 ? 'bg-blue-100 dark:bg-blue-900 border-2 border-blue-300 dark:border-blue-700'
                                                                 : 'bg-gray-100 dark:bg-gray-600 opacity-75'
-                                                    } ${!isReadOnly && !match.winningTeam && match.team2 ? '' : isReadOnly ? '' : 'cursor-pointer'}`}
+                                                    }`}
                                             >
                                                 <div className="font-semibold text-sm">Team 1</div>
                                                 <div className="text-sm">{match.team1.player1.playerName}</div>
@@ -113,7 +133,7 @@ export default function Bracket({
                                                 onClick={() => handleTeamClick(match.id, 2, match)}
                                                 className={`p-3 rounded-lg transition-all ${match.winningTeam === 2
                                                         ? 'bg-green-500 text-white font-bold shadow-lg scale-105'
-                                                        : !isReadOnly
+                                                        : !isReadOnly && match.status === 'active'
                                                             ? 'cursor-pointer bg-red-100 dark:bg-red-900 hover:bg-red-200 dark:hover:bg-red-800 border-2 border-red-300 dark:border-red-700'
                                                             : 'bg-red-100 dark:bg-red-900 border-2 border-red-300 dark:border-red-700'
                                                     }`}
