@@ -36,7 +36,7 @@ export default function Tournament() {
 
   const handleStartTournament = () => {
     startTournament(id).then(() => {
-      window.location.href = `/tournament/${id}/bracket`;
+      window.location.href = `/tournament/${id}/anthem`;
     });
   };
 

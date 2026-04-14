@@ -89,6 +89,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     // ── 6. Start Tournament ──────────────────────────────────────────────────
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem', { timeout: 10_000 });
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket', { timeout: 10_000 });
     console.log('✓ Tournament started, redirected to bracket');
 
@@ -195,8 +197,10 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
       await delay(1500);
     }
 
-    await expect(orgPage.locator('text=P6')).toBeVisible({ timeout: 10_000 });
+    await expect(orgPage.getByText('P6', { exact: true })).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
 
     // 3 teams → bracketSize=4 → 1 bye, 1 regular
@@ -234,6 +238,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     await expect(orgPage.locator('text=A6')).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
 
     // Wait for bracket init: 1 regular match → 1 Start button
@@ -282,6 +288,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     await expect(orgPage.locator('text=B6')).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
 
     // Wait for bracket init to finish before checking player pages
@@ -335,6 +343,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     await expect(orgPage.locator('text=C6')).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
 
     // Only 1 real match → exactly 1 enabled Start button despite boardCount=1
@@ -374,6 +384,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     await expect(orgPage.locator('text=R4')).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
 
     // Wait for bracket init to finish before clicking Start
@@ -510,6 +522,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     await expect(orgPage.getByText('D14', { exact: true })).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
 
     // 7 teams → 1 bye + 3 regular → 3 Start buttons (byes have none)
@@ -570,6 +584,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     await expect(orgPage.getByText('E14', { exact: true })).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
     // 1 bye + 3 regular = 3 Start buttons
     await expect(orgPage.locator('button:text("Start")')).toHaveCount(3, { timeout: 10_000 });
@@ -633,6 +649,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     await expect(orgPage.getByText('Q8', { exact: true })).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
 
     // Wait for round-1 Start buttons to render
@@ -722,6 +740,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     await expect(orgPage.getByText('NP4', { exact: true })).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
     await expect(orgPage.locator('button:text("Start"):not([disabled])')).toHaveCount(1, { timeout: 10_000 });
 
@@ -790,6 +810,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     await expect(orgPage.getByText('DN4', { exact: true })).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
     await expect(orgPage.locator('button:text("Start"):not([disabled])')).toHaveCount(1, { timeout: 10_000 });
 
@@ -830,6 +852,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     await expect(orgPage.getByText('T10', { exact: true })).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
 
     // 5 teams → bracketSize=8 → 3 byes + 1 regular
@@ -864,6 +888,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     await expect(orgPage.getByText('S8', { exact: true })).toBeVisible({ timeout: 10_000 });
     await orgPage.click('button:text("Start Tournament")');
+    await orgPage.waitForURL('**/anthem');
+    await orgPage.click('a:text("Continue to Bracket")');
     await orgPage.waitForURL('**/bracket');
     await expect(orgPage.locator('button:text("Start")').first()).toBeVisible({ timeout: 10_000 });
 
