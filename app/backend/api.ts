@@ -317,45 +317,44 @@ export async function getMatches(tournamentId: string) {
   try {
     await ensureUserAuthenticated();
 
-    const matches = await pb.collection('matches').getFullList({
-      filter: `tournamentId = "${tournamentId}"`,
-      sort: 'round',
-      expand: 'team1,team2',
-      requestKey: null,
-    });
-    return matches.map(match => mapMatchData(match));
+    const [matchesRaw, playersRaw] = await Promise.all([
+      pb.collection('matches').getFullList({
+        filter: `tournamentId = "${tournamentId}"`,
+        sort: 'round',
+        requestKey: null,
+      }),
+      pb.collection('players').getFullList({
+        filter: `tournamentId = "${tournamentId}"`,
+        requestKey: null,
+      }),
+    ]);
+
+    const playerMap = new Map<string, any>(playersRaw.map((p: any) => [p.id, p]));
+    return matchesRaw.map(match => mapMatchData(match, playerMap));
   } catch (error) {
     console.error('Error fetching matches:', error);
     throw error;
   }
 }
 
-function mapMatchData(match: any) {
-  // Use raw ID arrays as source of truth so we get the right team composition
-  // even when expand returns partial data (e.g. a player can only view their own record).
+function mapMatchData(match: any, playerMap?: Map<string, any>) {
   const team1Ids: (string | null)[] = match.team1 || [];
   const team2Ids: (string | null)[] = match.team2 || [];
 
-  // Build ID→record lookup maps from expand data (may be partial)
-  const expandedTeam1: any[] = match?.expand?.team1 || [];
-  const expandedTeam2: any[] = match?.expand?.team2 || [];
-  const team1Map = new Map<string, any>(expandedTeam1.map((p: any) => [p.id, p]));
-  const team2Map = new Map<string, any>(expandedTeam2.map((p: any) => [p.id, p]));
-
-  function makePlayer(id: string | null, map: Map<string, any>) {
+  function makePlayer(id: string | null) {
     if (!id) return null;
-    const expanded = map.get(id);
-    return { id, playerName: expanded?.playerName ?? '' };
+    const record = playerMap?.get(id);
+    return { id, playerName: record?.playerName ?? '' };
   }
 
   return {
     tournamentId: match.tournamentId,
     matchId: match.id,
     round: match.round,
-    team1Player1: makePlayer(team1Ids[0] ?? null, team1Map),
-    team1Player2: makePlayer(team1Ids[1] ?? null, team1Map),
-    team2Player1: makePlayer(team2Ids[0] ?? null, team2Map),
-    team2Player2: makePlayer(team2Ids[1] ?? null, team2Map),
+    team1Player1: makePlayer(team1Ids[0] ?? null),
+    team1Player2: makePlayer(team1Ids[1] ?? null),
+    team2Player1: makePlayer(team2Ids[0] ?? null),
+    team2Player2: makePlayer(team2Ids[1] ?? null),
     winningTeam: match.winningTeam,
     status: match.status as 'waiting' | 'active' | 'completed',
   };

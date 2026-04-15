@@ -901,8 +901,8 @@
   },
   {
     "id": "pbc_3072146508",
-    "listRule": "tournamentId.ownerId = @request.auth.id \n|| (\n  @collection.players.tournamentId ?= tournamentId\n  && @collection.players.userId = @request.auth.id\n)",
-    "viewRule": "tournamentId.ownerId = @request.auth.id || userId = @request.auth.id",
+    "listRule": "tournamentId.ownerId = @request.auth.id\n|| (\n  @collection.players.tournamentId ?= tournamentId\n  && @collection.players.userId ?= @request.auth.id\n)",
+    "viewRule": "tournamentId.ownerId = @request.auth.id\n|| userId = @request.auth.id\n|| (\n  @collection.players.tournamentId ?= tournamentId\n  && @collection.players.userId ?= @request.auth.id\n)",
     "createRule": "@request.auth.id != ''",
     "updateRule": "tournamentId.ownerId = @request.auth.id || userId = @request.auth.id",
     "deleteRule": "tournamentId.status != 'playing' && (\n  tournamentId.ownerId = @request.auth.id || userId = @request.auth.id\n)",
