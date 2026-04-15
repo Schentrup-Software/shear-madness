@@ -1,6 +1,10 @@
 .DS_Store
 /node_modules/
 
+# Local PocketBase instance (devcontainer)
+/.local-pocketbase/
+/.env.development.local
+
 # React Router
 /.react-router/
 /build/
