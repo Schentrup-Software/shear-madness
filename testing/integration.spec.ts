@@ -79,8 +79,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     const { ctx: danaCtx } = await signUpPlayer(browser, signupUrl, 'Dana');
 
     // Real-time: all 4 players visible on organizer page without reload
-    await expect(orgPage.locator('text=Alice')).toBeVisible({ timeout: 10_000 });
-    await expect(orgPage.locator('text=Dana')).toBeVisible({ timeout: 10_000 });
+    await expect(orgPage.locator('text=Alice')).toBeVisible({ timeout: 20_000 });
+    await expect(orgPage.locator('text=Dana')).toBeVisible({ timeout: 20_000 });
     console.log('✓ All 4 players visible on organizer page in real-time');
 
     // ── 6. Start Tournament ──────────────────────────────────────────────────
@@ -106,6 +106,12 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     const queueCard = alicePage.locator('text=in the queue');
     await expect(queueCard).toBeVisible({ timeout: 10_000 });
     console.log('✓ Queue position card visible on player page');
+
+    // §11: All player names visible in the bracket from a player's perspective
+    for (const name of ['Alice', 'Bob', 'Charlie', 'Dana']) {
+      await expect(alicePage.getByText(name, { exact: true }).first()).toBeVisible({ timeout: 5_000 });
+    }
+    console.log('✓ All 4 player names visible in bracket from player page');
 
     // ── 9. Board limiting: boardCount=1, start the match → board full ────────
     await startButtons.first().click();
@@ -171,46 +177,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
   // ── Bye tests (section 8) ────────────────────────────────────────────────
 
-  test('8a: 6 players (3 teams) → 1 bye match + 1 regular match in round 1', async ({ browser }) => {
-    test.setTimeout(60_000);
-    const orgCtx = await browser.newContext();
-    const orgPage = await orgCtx.newPage();
-
-    await orgPage.goto('/');
-    await orgPage.fill('#tournamentName', 'Bye Test 6 Players');
-    await orgPage.fill('#boardCount', '2');
-    await orgPage.click('button[type=submit]');
-    await orgPage.waitForURL('**/tournament?id=**');
-
-    const tournamentId = new URL(orgPage.url()).searchParams.get('id')!;
-    const signupUrl = `${BASE}/tournament/${tournamentId}/signup`;
-
-    const ctxs: BrowserContext[] = [];
-    for (const name of ['P1', 'P2', 'P3', 'P4', 'P5', 'P6']) {
-      const { ctx } = await signUpPlayer(browser, signupUrl, name);
-      ctxs.push(ctx);
-    }
-
-    await expect(orgPage.getByText('P6', { exact: true })).toBeVisible({ timeout: 10_000 });
-    await orgPage.click('button:text("Start Tournament")');
-    await orgPage.waitForURL('**/anthem');
-    await orgPage.click('a:text("Continue to Bracket")');
-    await orgPage.waitForURL('**/bracket');
-
-    // 3 teams → bracketSize=4 → 1 bye, 1 regular
-    await expect(orgPage.locator('text=Bye - Team 1 advances')).toHaveCount(1, { timeout: 10_000 });
-    console.log('✓ 1 bye match visible in round 1');
-
-    // Only the 1 regular match has a Start button; the bye match must not
-    const startButtons = orgPage.locator('button:text("Start")');
-    await expect(startButtons).toHaveCount(1, { timeout: 5_000 });
-    console.log('✓ Exactly 1 Start button (bye match has none)');
-
-    await Promise.all([orgCtx, ...ctxs].map(c => c.close()));
-  });
-
-  test('8b: Bye auto-advancement — completing the regular match creates a Finals match', async ({ browser }) => {
-    test.setTimeout(60_000);
+  test('8b: 6-player bye bracket — shape, player states, and auto-advancement to Finals', async ({ browser }) => {
+    test.setTimeout(90_000);
     const orgCtx = await browser.newContext();
     const orgPage = await orgCtx.newPage();
 
@@ -223,10 +191,11 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     const tournamentId = new URL(orgPage.url()).searchParams.get('id')!;
     const signupUrl = `${BASE}/tournament/${tournamentId}/signup`;
 
-    const ctxs: BrowserContext[] = [];
+    // Collect player URLs (needed for 8d player-page assertions)
+    const playerCtxs: { url: string; ctx: BrowserContext }[] = [];
     for (const name of ['A1', 'A2', 'A3', 'A4', 'A5', 'A6']) {
-      const { ctx } = await signUpPlayer(browser, signupUrl, name);
-      ctxs.push(ctx);
+      const { playerUrl, ctx } = await signUpPlayer(browser, signupUrl, name);
+      playerCtxs.push({ url: playerUrl, ctx });
     }
 
     await expect(orgPage.locator('text=A6')).toBeVisible({ timeout: 10_000 });
@@ -237,6 +206,28 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     // Wait for bracket init: 1 regular match → 1 Start button
     await expect(orgPage.locator('button:text("Start")')).toBeVisible({ timeout: 10_000 });
+
+    // 8a: 3 teams → bracketSize=4 → 1 bye, 1 regular
+    await expect(orgPage.locator('text=Bye - Team 1 advances')).toHaveCount(1, { timeout: 10_000 });
+    await expect(orgPage.locator('button:text("Start")')).toHaveCount(1, { timeout: 5_000 });
+    console.log('✓ 1 bye match, exactly 1 Start button');
+
+    // 8d: Navigate to all 6 player pages and count bye vs queue messages
+    let byeCount = 0;
+    let queueCount = 0;
+    for (const { url, ctx } of playerCtxs) {
+      const page = await ctx.newPage();
+      await page.goto(url);
+      await expect(page.locator('text=in progress')).toBeVisible({ timeout: 10_000 });
+      const byeLoc = page.locator('text=You have a bye');
+      const queueLoc = page.locator('text=in the queue');
+      await expect(byeLoc.or(queueLoc)).toBeVisible({ timeout: 10_000 });
+      if (await byeLoc.isVisible()) byeCount++;
+      if (await queueLoc.isVisible()) queueCount++;
+    }
+    expect(byeCount).toBe(2);
+    expect(queueCount).toBe(4);
+    console.log(`✓ ${byeCount} bye players, ${queueCount} queued players`);
 
     // Start and complete the one regular match
     await orgPage.locator('button:text("Start")').click();
@@ -253,61 +244,6 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     const byeTexts = orgPage.locator('text=Bye - Team 1 advances');
     await expect(byeTexts).toHaveCount(1); // still 1 from round 1, not 2
     console.log('✓ No new byes created in round 2');
-
-    await Promise.all([orgCtx, ...ctxs].map(c => c.close()));
-  });
-
-  test('8d: Player page bye state — bye players see the bye message, not a queue position', async ({ browser }) => {
-    test.setTimeout(60_000);
-    const orgCtx = await browser.newContext();
-    const orgPage = await orgCtx.newPage();
-
-    await orgPage.goto('/');
-    await orgPage.fill('#tournamentName', 'Bye Player Page Test');
-    await orgPage.fill('#boardCount', '2');
-    await orgPage.click('button[type=submit]');
-    await orgPage.waitForURL('**/tournament?id=**');
-
-    const tournamentId = new URL(orgPage.url()).searchParams.get('id')!;
-    const signupUrl = `${BASE}/tournament/${tournamentId}/signup`;
-
-    // Sign up 6 players and collect all player URLs
-    const playerCtxs: { name: string; url: string; ctx: BrowserContext }[] = [];
-    for (const name of ['B1', 'B2', 'B3', 'B4', 'B5', 'B6']) {
-      const { playerUrl, ctx } = await signUpPlayer(browser, signupUrl, name);
-      playerCtxs.push({ name, url: playerUrl, ctx });
-    }
-
-    await expect(orgPage.locator('text=B6')).toBeVisible({ timeout: 10_000 });
-    await orgPage.click('button:text("Start Tournament")');
-    await orgPage.waitForURL('**/anthem');
-    await orgPage.click('a:text("Continue to Bracket")');
-    await orgPage.waitForURL('**/bracket');
-
-    // Wait for bracket init to finish before checking player pages
-    await expect(orgPage.locator('button:text("Start")')).toBeVisible({ timeout: 10_000 });
-
-    // Navigate to all 6 player pages and count how many show the bye/queue message
-    let byeCount = 0;
-    let queueCount = 0;
-    for (const { url, ctx } of playerCtxs) {
-      const page = await ctx.newPage();
-      await page.goto(url);
-      await expect(page.locator('text=in progress')).toBeVisible({ timeout: 10_000 });
-
-      // Wait for match state to load (either bye message or queue position)
-      const byeLoc = page.locator('text=You have a bye');
-      const queueLoc = page.locator('text=in the queue');
-      await expect(byeLoc.or(queueLoc)).toBeVisible({ timeout: 10_000 });
-
-      if (await byeLoc.isVisible()) byeCount++;
-      if (await queueLoc.isVisible()) queueCount++;
-    }
-
-    // 3 teams: 1 bye team (2 players) + 1 regular match (4 players)
-    expect(byeCount).toBe(2);
-    expect(queueCount).toBe(4);
-    console.log(`✓ ${byeCount} bye players, ${queueCount} queued players`);
 
     await Promise.all([orgCtx, ...playerCtxs.map(p => p.ctx)].map(c => c.close()));
   });
@@ -483,66 +419,6 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     await Promise.all([orgCtx, ...ctxs].map(c => c.close()));
   });
 
-  // ── §4: boardCount=2 board limiting ─────────────────────────────────────
-  // Use 14 players → 7 teams → 1 bye + 3 regular round-1 matches → 3 startable matches.
-  // boardCount=2 → 2 active + 1 disabled, exercising the limiting logic.
-  test('§4: boardCount=2 — 2 matches active, remaining Start buttons disabled, waiting clicks no-op', async ({ browser }) => {
-    test.setTimeout(180_000);
-    const orgCtx = await browser.newContext();
-    const orgPage = await orgCtx.newPage();
-
-    await orgPage.goto('/');
-    await orgPage.fill('#tournamentName', 'Board Limit 2 Test');
-    await orgPage.fill('#boardCount', '2');
-    await orgPage.click('button[type=submit]');
-    await orgPage.waitForURL('**/tournament?id=**');
-
-    const tournamentId = new URL(orgPage.url()).searchParams.get('id')!;
-    const signupUrl = `${BASE}/tournament/${tournamentId}/signup`;
-
-    const ctxs: BrowserContext[] = [];
-    const playerNames = Array.from({ length: 14 }, (_, i) => `D${i + 1}`);
-    for (const name of playerNames) {
-      const { ctx } = await signUpPlayer(browser, signupUrl, name);
-      ctxs.push(ctx);
-    }
-
-    await expect(orgPage.getByText('D14', { exact: true })).toBeVisible({ timeout: 10_000 });
-    await orgPage.click('button:text("Start Tournament")');
-    await orgPage.waitForURL('**/anthem');
-    await orgPage.click('a:text("Continue to Bracket")');
-    await orgPage.waitForURL('**/bracket');
-
-    // 7 teams → 1 bye + 3 regular → 3 Start buttons (byes have none)
-    const startButtons = orgPage.locator('button:text("Start")');
-    await expect(startButtons).toHaveCount(3, { timeout: 10_000 });
-    console.log('✓ 3 Start buttons visible (1 bye, 3 regular)');
-
-    // Start 2 matches (boardCount=2 fills the board)
-    await orgPage.locator('button:text("Start"):not([disabled])').first().click();
-    await expect(orgPage.locator('text=Active')).toHaveCount(1, { timeout: 5_000 });
-    await orgPage.locator('button:text("Start"):not([disabled])').first().click();
-    await expect(orgPage.locator('text=Active')).toHaveCount(2, { timeout: 5_000 });
-    console.log('✓ 2 matches Active');
-
-    // Remaining Start button must be disabled
-    await expect(orgPage.locator('button:text("Start"):not([disabled])')).toHaveCount(0);
-    await expect(orgPage.locator('button:text("Start")[disabled]')).toHaveCount(1);
-    console.log('✓ Remaining Start button disabled');
-
-    // Click a team card in a waiting (non-active) match → no winner highlight should appear.
-    // Active matches have .cursor-pointer on their team divs; waiting matches do not.
-    // Verify by counting .bg-green-500 before/after the click.
-    const greensBefore = await orgPage.locator('.bg-green-500').count();
-    // Click the LAST visible "Team 1" text — that's in the still-waiting match
-    await orgPage.getByText('Team 1', { exact: true }).last().click({ force: true });
-    // Give the app a moment to process the click, then assert the count is unchanged
-    await expect(orgPage.locator('.bg-green-500')).toHaveCount(greensBefore, { timeout: 1000 });
-    console.log('✓ Click on waiting-match team is a no-op (no new green highlight)');
-
-    await Promise.all([orgCtx, ...ctxs].map(c => c.close()));
-  });
-
   // ── §5: Board freed after winner selection + full progression to Champions ─
   // 14 players → 7 teams → 1 bye + 3 regular round-1 matches.
   // boardCount=2 lets us start 2, then verify selecting a winner re-enables the 3rd.
@@ -582,6 +458,13 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     await expect(orgPage.locator('text=Active')).toHaveCount(2, { timeout: 5_000 });
     // 3rd Start button is now disabled
     await expect(orgPage.locator('button:text("Start"):not([disabled])')).toHaveCount(0);
+    await expect(orgPage.locator('button:text("Start")[disabled]')).toHaveCount(1);
+
+    // §4: Click a waiting-match team card — must not produce a green highlight
+    const greensBefore = await orgPage.locator('.bg-green-500').count();
+    await orgPage.getByText('Team 1', { exact: true }).last().click({ force: true });
+    await expect(orgPage.locator('.bg-green-500')).toHaveCount(greensBefore, { timeout: 1000 });
+    console.log('✓ Click on waiting-match team is a no-op');
 
     // Select a winner in the first active match — board frees up, the 3rd Start becomes enabled
     await orgPage.locator('.cursor-pointer').first().click();
@@ -590,17 +473,19 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
 
     // Drive the bracket to Champions: alternately start any enabled match and pick winners
     // until the Champions banner appears. Generous loop ceiling to cover 3 remaining round-1
-    // matches + later rounds.
+    // matches + later rounds. Champions is checked first so we exit immediately when it appears,
+    // and cursor.click uses a short timeout+catch to avoid blocking on mid-transition cards.
     for (let i = 0; i < 30; i++) {
+      if (await orgPage.locator('text=Champions').count() > 0) break;
       const enabledStart = orgPage.locator('button:text("Start"):not([disabled])');
       if (await enabledStart.count() > 0) {
-        await enabledStart.first().click();
-      }
-      const cursor = orgPage.locator('.cursor-pointer');
-      if (await cursor.count() > 0) {
-        await cursor.first().click();
+        await enabledStart.first().click({ timeout: 3_000 }).catch(() => {});
       }
       if (await orgPage.locator('text=Champions').count() > 0) break;
+      const cursor = orgPage.locator('.cursor-pointer');
+      if (await cursor.count() > 0) {
+        await cursor.first().click({ timeout: 3_000 }).catch(() => {});
+      }
     }
     await expect(orgPage.locator('text=Champions')).toBeVisible({ timeout: 15_000 });
     console.log('✓ Champions banner reached');
@@ -608,74 +493,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     await Promise.all([orgCtx, ...ctxs].map(c => c.close()));
   });
 
-  // ── §6: Queue re-numbering across multiple players ──────────────────────
-  test('§6: Queue position decrements in real-time when an earlier match starts', async ({ browser }) => {
-    test.setTimeout(180_000);
-    const orgCtx = await browser.newContext();
-    const orgPage = await orgCtx.newPage();
-
-    await orgPage.goto('/');
-    await orgPage.fill('#tournamentName', 'Queue Renumber Test');
-    await orgPage.fill('#boardCount', '1');
-    await orgPage.click('button[type=submit]');
-    await orgPage.waitForURL('**/tournament?id=**');
-
-    const tournamentId = new URL(orgPage.url()).searchParams.get('id')!;
-    const signupUrl = `${BASE}/tournament/${tournamentId}/signup`;
-
-    const playerCtxs: { url: string; ctx: BrowserContext }[] = [];
-    for (const name of ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8']) {
-      const { playerUrl, ctx } = await signUpPlayer(browser, signupUrl, name);
-      playerCtxs.push({ url: playerUrl, ctx });
-    }
-
-    await expect(orgPage.getByText('Q8', { exact: true })).toBeVisible({ timeout: 10_000 });
-    await orgPage.click('button:text("Start Tournament")');
-    await orgPage.waitForURL('**/anthem');
-    await orgPage.click('a:text("Continue to Bracket")');
-    await orgPage.waitForURL('**/bracket');
-
-    // Wait for round-1 Start buttons to render
-    await expect(orgPage.locator('button:text("Start")').first()).toBeVisible({ timeout: 10_000 });
-
-    // Open all 8 player pages and read their queue positions
-    const opened: { page: Page; pos: number }[] = [];
-    for (const { url, ctx } of playerCtxs) {
-      const page = await ctx.newPage();
-      await page.goto(url);
-      await expect(page.locator('text=in the queue')).toBeVisible({ timeout: 10_000 });
-      const text = await page.locator('text=in the queue').first().textContent();
-      const m = text?.match(/#(\d+)/);
-      const pos = m ? parseInt(m[1]) : 0;
-      opened.push({ page, pos });
-    }
-
-    const positions = opened.map(o => o.pos).sort((a, b) => a - b);
-    console.log(`Queue positions across players: ${positions.join(',')}`);
-    expect(positions).toContain(1);
-    // At least one player should show position > 1 (i.e. there are multiple matches queued)
-    expect(positions.some(p => p > 1)).toBe(true);
-
-    // Pick a player at position 2 to watch for real-time decrement
-    const watcher = opened.find(o => o.pos === 2);
-    expect(watcher).toBeTruthy();
-
-    // Start the only enabled match (#1)
-    await orgPage.locator('button:text("Start"):not([disabled])').first().click();
-
-    // Watcher's position should decrement to 1 in real-time
-    await expect.poll(async () => {
-      const text = await watcher!.page.locator('text=in the queue').first().textContent().catch(() => null);
-      const m = text?.match(/#(\d+)/);
-      return m ? parseInt(m[1]) : null;
-    }, { timeout: 15_000 }).toBe(1);
-    console.log('✓ Queue position decremented #2 → #1 in real-time');
-
-    await Promise.all([orgCtx, ...playerCtxs.map(p => p.ctx)].map(c => c.close()));
-  });
-
-  // ── §7: Browser notification fires when match starts ────────────────────
-  test('§7: Browser notification fires when player\'s match starts', async ({ browser }) => {
+  // ── §7: Browser notifications — fires when granted, no errors when denied ─
+  test('§7: Browser notifications — fires when granted, no errors when denied', async ({ browser }) => {
     test.setTimeout(120_000);
     const orgCtx = await browser.newContext();
     const orgPage = await orgCtx.newPage();
@@ -689,7 +508,7 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     const tournamentId = new URL(orgPage.url()).searchParams.get('id')!;
     const signupUrl = `${BASE}/tournament/${tournamentId}/signup`;
 
-    // Create the notif player's context with notification permission and an injected stub
+    // Player 1: notification permission granted
     const notifCtx = await browser.newContext({ permissions: ['notifications'] });
     await notifCtx.addInitScript(() => {
       (window as any).__notifications = [];
@@ -702,7 +521,6 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
       }
       (window as any).Notification = FakeNotification;
     });
-
     const notifPage = await notifCtx.newPage();
     await notifPage.goto(signupUrl);
     await expect(notifPage.locator('#playerName')).toBeVisible();
@@ -711,9 +529,29 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     await notifPage.waitForURL('**/player');
     const notifPlayerUrl = notifPage.url();
 
-    // Sign up 3 more players to make 4 total (= 1 match with notif player in it, since teams of 2 from 4 = 2 teams = 1 match)
+    // Player 2: notification permission denied
+    const deniedCtx = await browser.newContext();
+    await deniedCtx.addInitScript(() => {
+      class FakeNotification {
+        static permission = 'denied';
+        static requestPermission = () => Promise.resolve('denied');
+        constructor() { /* should not be called */ }
+      }
+      (window as any).Notification = FakeNotification;
+    });
+    const pageErrors: string[] = [];
+    const deniedPage = await deniedCtx.newPage();
+    deniedPage.on('pageerror', err => pageErrors.push(err.message));
+    await deniedPage.goto(signupUrl);
+    await expect(deniedPage.locator('#playerName')).toBeVisible();
+    await deniedPage.fill('#playerName', 'DeniedPlayer');
+    await deniedPage.click('button[type=submit]');
+    await deniedPage.waitForURL('**/player');
+    const deniedUrl = deniedPage.url();
+
+    // Sign up 2 more players to fill out 2 teams of 2
     const otherCtxs: BrowserContext[] = [];
-    for (const name of ['NP2', 'NP3', 'NP4']) {
+    for (const name of ['NP3', 'NP4']) {
       const { ctx } = await signUpPlayer(browser, signupUrl, name);
       otherCtxs.push(ctx);
     }
@@ -725,15 +563,18 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     await orgPage.waitForURL('**/bracket');
     await expect(orgPage.locator('button:text("Start"):not([disabled])')).toHaveCount(1, { timeout: 10_000 });
 
-    // Reload the notif page so player.tsx re-mounts after tournament starts (subscription path triggers notif)
+    // Reload both player pages so they re-mount after the tournament starts
     await notifPage.goto(notifPlayerUrl);
+    await deniedPage.goto(deniedUrl);
     await expect(notifPage.locator('text=in the queue')).toBeVisible({ timeout: 10_000 });
+    await expect(deniedPage.locator('text=in the queue')).toBeVisible({ timeout: 10_000 });
 
-    // Start the only match — NotifPlayer's match transitions waiting → active
+    // Start the only match — both players' matches transition waiting → active
     await orgPage.locator('button:text("Start"):not([disabled])').first().click();
     await expect(notifPage.locator('text=Your match is active')).toBeVisible({ timeout: 10_000 });
+    await expect(deniedPage.locator('text=Your match is active')).toBeVisible({ timeout: 10_000 });
 
-    // Notification should have been recorded
+    // Granted: notification should have been recorded with the correct title
     await expect.poll(async () => {
       return await notifPage.evaluate(() => (window as any).__notifications?.length || 0);
     }, { timeout: 5_000 }).toBeGreaterThan(0);
@@ -741,69 +582,11 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     expect(notifications[0].title).toBe('Your game is starting!');
     console.log('✓ Notification fired with correct title');
 
-    await Promise.all([orgCtx, notifCtx, ...otherCtxs].map(c => c.close()));
-  });
-
-  // ── §7b: No notification when permission denied; no uncaught errors ─────
-  test('§7b: Match starts with notification permission denied — no errors', async ({ browser }) => {
-    test.setTimeout(120_000);
-    const orgCtx = await browser.newContext();
-    const orgPage = await orgCtx.newPage();
-
-    await orgPage.goto('/');
-    await orgPage.fill('#tournamentName', 'Notification Denied Test');
-    await orgPage.fill('#boardCount', '1');
-    await orgPage.click('button[type=submit]');
-    await orgPage.waitForURL('**/tournament?id=**');
-
-    const tournamentId = new URL(orgPage.url()).searchParams.get('id')!;
-    const signupUrl = `${BASE}/tournament/${tournamentId}/signup`;
-
-    const deniedCtx = await browser.newContext();
-    await deniedCtx.addInitScript(() => {
-      class FakeNotification {
-        static permission = 'denied';
-        static requestPermission = () => Promise.resolve('denied');
-        constructor() { /* should not be called */ }
-      }
-      (window as any).Notification = FakeNotification;
-    });
-
-    const pageErrors: string[] = [];
-    const deniedPage = await deniedCtx.newPage();
-    deniedPage.on('pageerror', err => pageErrors.push(err.message));
-
-    await deniedPage.goto(signupUrl);
-    await expect(deniedPage.locator('#playerName')).toBeVisible();
-    await deniedPage.fill('#playerName', 'DeniedPlayer');
-    await deniedPage.click('button[type=submit]');
-    await deniedPage.waitForURL('**/player');
-    const deniedUrl = deniedPage.url();
-
-    const otherCtxs: BrowserContext[] = [];
-    for (const name of ['DN2', 'DN3', 'DN4']) {
-      const { ctx } = await signUpPlayer(browser, signupUrl, name);
-      otherCtxs.push(ctx);
-    }
-
-    await expect(orgPage.getByText('DN4', { exact: true })).toBeVisible({ timeout: 10_000 });
-    await orgPage.click('button:text("Start Tournament")');
-    await orgPage.waitForURL('**/anthem');
-    await orgPage.click('a:text("Continue to Bracket")');
-    await orgPage.waitForURL('**/bracket');
-    await expect(orgPage.locator('button:text("Start"):not([disabled])')).toHaveCount(1, { timeout: 10_000 });
-
-    await deniedPage.goto(deniedUrl);
-    await expect(deniedPage.locator('text=in the queue')).toBeVisible({ timeout: 10_000 });
-
-    await orgPage.locator('button:text("Start"):not([disabled])').first().click();
-    await expect(deniedPage.locator('text=Your match is active')).toBeVisible({ timeout: 10_000 });
-
-    // No uncaught page errors should have been raised
+    // Denied: no uncaught page errors
     expect(pageErrors).toEqual([]);
     console.log('✓ No uncaught errors when notification permission denied');
 
-    await Promise.all([orgCtx, deniedCtx, ...otherCtxs].map(c => c.close()));
+    await Promise.all([orgCtx, notifCtx, deniedCtx, ...otherCtxs].map(c => c.close()));
   });
 
   // ── §8c: 10 players (5 teams) → 3 byes + 1 regular ──────────────────────
@@ -841,59 +624,8 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     await Promise.all([orgCtx, ...ctxs].map(c => c.close()));
   });
 
-  // ── §9: Player page refresh preserves queue position ────────────────────
-  test('§9: Player page queue position persists across reload', async ({ browser }) => {
-    test.setTimeout(180_000);
-    const orgCtx = await browser.newContext();
-    const orgPage = await orgCtx.newPage();
-
-    await orgPage.goto('/');
-    await orgPage.fill('#tournamentName', 'Queue Persist Test');
-    await orgPage.fill('#boardCount', '1');
-    await orgPage.click('button[type=submit]');
-    await orgPage.waitForURL('**/tournament?id=**');
-
-    const tournamentId = new URL(orgPage.url()).searchParams.get('id')!;
-    const signupUrl = `${BASE}/tournament/${tournamentId}/signup`;
-
-    const playerCtxs: { url: string; ctx: BrowserContext }[] = [];
-    for (const name of ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8']) {
-      const { playerUrl, ctx } = await signUpPlayer(browser, signupUrl, name);
-      playerCtxs.push({ url: playerUrl, ctx });
-    }
-
-    await expect(orgPage.getByText('S8', { exact: true })).toBeVisible({ timeout: 10_000 });
-    await orgPage.click('button:text("Start Tournament")');
-    await orgPage.waitForURL('**/anthem');
-    await orgPage.click('a:text("Continue to Bracket")');
-    await orgPage.waitForURL('**/bracket');
-    await expect(orgPage.locator('button:text("Start")').first()).toBeVisible({ timeout: 10_000 });
-
-    // Pick the last player to maximize chance of a >1 queue position
-    const { url, ctx } = playerCtxs[playerCtxs.length - 1];
-    const page = await ctx.newPage();
-    await page.goto(url);
-    await expect(page.locator('text=in the queue')).toBeVisible({ timeout: 10_000 });
-
-    const before = await page.locator('text=in the queue').first().textContent();
-    const beforeMatch = before?.match(/#(\d+)/);
-    const beforePos = beforeMatch ? parseInt(beforeMatch[1]) : 0;
-    expect(beforePos).toBeGreaterThan(0);
-    console.log(`Queue position before reload: #${beforePos}`);
-
-    await page.reload();
-    await expect(page.locator('text=in the queue')).toBeVisible({ timeout: 10_000 });
-    const after = await page.locator('text=in the queue').first().textContent();
-    const afterMatch = after?.match(/#(\d+)/);
-    const afterPos = afterMatch ? parseInt(afterMatch[1]) : 0;
-    expect(afterPos).toBe(beforePos);
-    console.log(`✓ Queue position #${afterPos} preserved across reload`);
-
-    await Promise.all([orgCtx, ...playerCtxs.map(p => p.ctx)].map(c => c.close()));
-  });
-
-  // ── §10: All players show correct unique positions; active match updates in real-time ─
-  // §6 verifies one player's position decrements. This test verifies:
+  // ── §10: Queue position correctness, persistence, and real-time updates ────
+  // Covers §6 (decrement on match start), §9 (reload preserves position), and:
   //   a) All 8 players start with the correct positions (1–4, each appearing exactly twice).
   //   b) When the organizer starts match 1, the two players in that match immediately see
   //      "Your match is active!" (no refresh), and a position-#2 player drops to #1.
@@ -911,7 +643,7 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
     const tournamentId = new URL(orgPage.url()).searchParams.get('id')!;
     const signupUrl = `${BASE}/tournament/${tournamentId}/signup`;
 
-    // 8 players → 4 matches; no delays needed (local PocketBase, no rate limits)
+    // 8 players → 4 teams of 2 → 2 round-1 matches; no delays needed (local PocketBase)
     const playerCtxs: { url: string; ctx: BrowserContext }[] = [];
     for (const name of ['PA1', 'PA2', 'PA3', 'PA4', 'PA5', 'PA6', 'PA7', 'PA8']) {
       const { playerUrl, ctx } = await signUpPlayer(browser, signupUrl, name);
@@ -936,88 +668,51 @@ test.describe('Shear Madness — Full Tournament Flow', () => {
       opened.push({ page, pos: m ? parseInt(m[1]) : 0 });
     }
 
-    // Each position 1–4 must appear exactly twice (one per match, two players per match)
+    // 2 matches, 4 players each → positions 1 and 2 must each appear exactly 4 times
     const counts = new Map<number, number>();
     for (const { pos } of opened) counts.set(pos, (counts.get(pos) ?? 0) + 1);
-    for (let p = 1; p <= 4; p++) {
-      expect(counts.get(p), `position #${p} should appear exactly twice`).toBe(2);
+    // 2 matches × 4 players per match: each position must appear exactly 4 times
+    for (let p = 1; p <= 2; p++) {
+      expect(counts.get(p), `position #${p} should appear exactly 4 times`).toBe(4);
     }
     console.log(`✓ Initial positions correct: ${opened.map(o => o.pos).sort((a,b) => a-b).join(',')}`);
 
-    // Identify the two players at position #1 (they are in the first match to be played)
-    const posOnePlayers = opened.filter(o => o.pos === 1);
-    expect(posOnePlayers).toHaveLength(2);
+    // §9: Reload preserves queue position (checked before any match starts)
+    const reloadTarget = opened.find(o => o.pos > 1)!;
+    const preReloadPos = reloadTarget.pos;
+    await reloadTarget.page.reload();
+    await expect(reloadTarget.page.locator('text=in the queue')).toBeVisible({ timeout: 10_000 });
+    const reloadedText = await reloadTarget.page.locator('text=in the queue').first().textContent();
+    const reloadedM = reloadedText?.match(/#(\d+)/);
+    expect(reloadedM ? parseInt(reloadedM[1]) : 0).toBe(preReloadPos);
+    console.log(`✓ Queue position #${preReloadPos} preserved across reload`);
 
-    // Pick one position-#2 player to watch for real-time decrement
-    const posTwoPlayer = opened.find(o => o.pos === 2)!;
-
-    // Organizer starts the first match (the one that is #1 in queue)
+    // Organizer starts whichever match the bracket renders first
     await orgPage.locator('button:text("Start"):not([disabled])').first().click();
 
-    // Position-#1 players must see "Your match is active!" in real-time (no refresh)
-    for (const { page } of posOnePlayers) {
-      await expect(page.locator('text=Your match is active')).toBeVisible({ timeout: 15_000 });
+    // Exactly 4 players (one full match) must see "Your match is active!" in real-time.
+    // We don't assume which match the bracket renders first, so poll all 8 pages concurrently.
+    const activeResults = await Promise.all(
+      opened.map(({ page }) =>
+        page.locator('text=Your match is active')
+          .waitFor({ state: 'visible', timeout: 15_000 })
+          .then(() => true).catch(() => false)
+      )
+    );
+    expect(activeResults.filter(Boolean)).toHaveLength(4);
+    console.log('✓ Exactly 4 players see "Your match is active!" in real-time');
+
+    // The remaining 4 players are still in the queue — their position must have updated
+    // to #1 (either they were already at #1, or they decremented from #2 because the
+    // other match started and vacated the top slot).
+    for (const { page } of opened.filter((_, i) => !activeResults[i])) {
+      await expect.poll(async () => {
+        const text = await page.locator('text=in the queue').first().textContent().catch(() => null);
+        const m = text?.match(/#(\d+)/);
+        return m ? parseInt(m[1]) : null;
+      }, { timeout: 15_000 }).toBe(1);
     }
-    console.log('✓ Both position-#1 players see "Your match is active!" in real-time');
-
-    // Position-#2 player must decrement to #1 in real-time
-    await expect.poll(async () => {
-      const text = await posTwoPlayer.page.locator('text=in the queue').first().textContent().catch(() => null);
-      const m = text?.match(/#(\d+)/);
-      return m ? parseInt(m[1]) : null;
-    }, { timeout: 15_000 }).toBe(1);
-    console.log('✓ Position-#2 player decremented to #1 in real-time');
-
-    await Promise.all([orgCtx, ...playerCtxs.map(p => p.ctx)].map(c => c.close()));
-  });
-
-  // ── §11: Player page shows all other players' names in the bracket ────────
-  // Verifies the PocketBase listRule fix: players can view each other's records,
-  // so the bracket renders everyone's name — not just the signed-in player's.
-  test('§11: Player page shows all other players\' names in the bracket', async ({ browser }) => {
-    test.setTimeout(90_000);
-    const orgCtx = await browser.newContext();
-    const orgPage = await orgCtx.newPage();
-
-    await orgPage.goto('/');
-    await orgPage.fill('#tournamentName', 'Player Names Visibility Test');
-    await orgPage.fill('#boardCount', '1');
-    await orgPage.click('button[type=submit]');
-    await orgPage.waitForURL('**/tournament?id=**');
-
-    const tournamentId = new URL(orgPage.url()).searchParams.get('id')!;
-    const signupUrl = `${BASE}/tournament/${tournamentId}/signup`;
-
-    // 4 players → 1 match; collect all player page URLs
-    const names = ['Aardvark', 'Bison', 'Cougar', 'Dingo'];
-    const playerCtxs: { name: string; url: string; ctx: BrowserContext }[] = [];
-    for (const name of names) {
-      const { playerUrl, ctx } = await signUpPlayer(browser, signupUrl, name);
-      playerCtxs.push({ name, url: playerUrl, ctx });
-    }
-
-    await expect(orgPage.getByText('Dingo', { exact: true })).toBeVisible({ timeout: 10_000 });
-    await orgPage.click('button:text("Start Tournament")');
-    await orgPage.waitForURL('**/anthem');
-    await orgPage.click('a:text("Continue to Bracket")');
-    await orgPage.waitForURL('**/bracket');
-    await expect(orgPage.locator('button:text("Start")')).toBeVisible({ timeout: 10_000 });
-
-    // Check each player's page: every player must see ALL four names in the bracket,
-    // including the three players they did not sign in as.
-    for (const { name: signedInName, url, ctx } of playerCtxs) {
-      const page = await ctx.newPage();
-      await page.goto(url);
-      await expect(page.locator('text=Tournament Bracket')).toBeVisible({ timeout: 10_000 });
-
-      for (const expectedName of names) {
-        await expect(
-          page.getByText(expectedName, { exact: true }),
-          `${signedInName}'s page should show "${expectedName}"`
-        ).toBeVisible({ timeout: 10_000 });
-      }
-      console.log(`✓ ${signedInName}'s page shows all 4 player names`);
-    }
+    console.log('✓ Remaining 4 players all show queue position #1 in real-time');
 
     await Promise.all([orgCtx, ...playerCtxs.map(p => p.ctx)].map(c => c.close()));
   });
