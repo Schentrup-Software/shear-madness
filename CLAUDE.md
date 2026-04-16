@@ -102,3 +102,7 @@ PocketBase WebSocket subscriptions (`players.*`, `matches.*`, `tournaments/{id}`
 ## Docker
 
 The Dockerfile produces a self-contained image: React SPA built by Vite is served as PocketBase's public folder, with embedded PocketBase (v0.28.2) as the backend. Single port (8080) exposes everything.
+
+## Verifying Work
+
+Before marking any task complete, run the `test-app` skill to confirm the app still functions. Do not report work as done until the integration tests pass.

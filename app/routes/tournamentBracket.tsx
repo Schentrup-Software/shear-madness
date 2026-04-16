@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getTournament, getPlayers, updateMatch, getMatches, createMatch, startMatch } from "../backend/api";
+import { getTournament, getPlayers, updateMatch, getMatches, createMatch, startMatch, stopMatch } from "../backend/api";
 import Bracket from "../components/Bracket";
 import type { Team, Match } from "../types/tournament";
 import { distributeTeams, collectRoundWinners, pairWinners, isRoundComplete } from "../utils/bracketLogic";
@@ -203,6 +203,11 @@ export default function TournamentBracket() {
         setMatches(prev => prev.map(m => m.id === matchId ? { ...m, status: updated.status } : m));
     };
 
+    const handleStopMatch = async (matchId: string) => {
+        const updated = await stopMatch(matchId);
+        setMatches(prev => prev.map(m => m.id === matchId ? { ...m, status: updated.status } : m));
+    };
+
     const activeCount = matches.filter(m => m.status === 'active').length;
 
     return (
@@ -217,6 +222,7 @@ export default function TournamentBracket() {
                 isReadOnly={false}
                 onSelectWinner={selectWinner}
                 onStartMatch={handleStartMatch}
+                onStopMatch={handleStopMatch}
                 canStartMatch={activeCount < boardCount}
                 stickyHeaderBg="bg-gray-50 dark:bg-gray-900"
             />

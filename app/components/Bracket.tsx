@@ -6,6 +6,7 @@ interface BracketProps {
     isReadOnly?: boolean;
     onSelectWinner?: (matchId: string, teamNumber: 1 | 2) => void;
     onStartMatch?: (matchId: string) => void;
+    onStopMatch?: (matchId: string) => void;
     canStartMatch?: boolean;
     stickyHeaderBg?: string;
 }
@@ -16,6 +17,7 @@ export default function Bracket({
     isReadOnly = false,
     onSelectWinner,
     onStartMatch,
+    onStopMatch,
     canStartMatch = false,
     stickyHeaderBg = 'bg-gray-50 dark:bg-gray-900'
 }: BracketProps) {
@@ -89,8 +91,17 @@ export default function Bracket({
                                                 Match {idx + 1}
                                             </span>
                                             {match.status === 'active' && (
-                                                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
+                                                <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
                                                     Active
+                                                    {!isReadOnly && !match.winningTeam && onStopMatch && (
+                                                        <button
+                                                            onClick={() => onStopMatch(match.id)}
+                                                            aria-label="Stop match"
+                                                            className="flex items-center justify-center w-4 h-4 rounded-full hover:bg-green-200 dark:hover:bg-green-700 leading-none"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    )}
                                                 </span>
                                             )}
                                             {match.status === 'waiting' && match.team2 && !isReadOnly && onStartMatch && (

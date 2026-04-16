@@ -1,4 +1,7 @@
-import pb from './pocketbaseClient';
+import pb, { POCKETBASE_URL } from './pocketbaseClient';
+
+const TEMP_EMAIL_KEY = `shear_madness_temp_email_${POCKETBASE_URL}`;
+const TEMP_PASSWORD_KEY = `shear_madness_temp_password_${POCKETBASE_URL}`;
 
 // Serializes concurrent auth calls on the same page to avoid auto-cancellation
 let ongoingAuth: Promise<any> | null = null;
@@ -23,8 +26,8 @@ async function ensureUserAuthenticated(): Promise<any> {
   ongoingAuth = (async () => {
     try {
       // Check if we have stored credentials in localStorage
-      const storedEmail = localStorage.getItem('shear_madness_temp_email');
-      const storedPassword = localStorage.getItem('shear_madness_temp_password');
+      const storedEmail = localStorage.getItem(TEMP_EMAIL_KEY);
+      const storedPassword = localStorage.getItem(TEMP_PASSWORD_KEY);
 
       if (storedEmail && storedPassword) {
         // Retry stored-credential auth up to 3 times on transient errors.
@@ -50,8 +53,8 @@ async function ensureUserAuthenticated(): Promise<any> {
         }
         if (credentialsInvalid) {
           console.log('Stored credentials invalid, creating new account');
-          localStorage.removeItem('shear_madness_temp_email');
-          localStorage.removeItem('shear_madness_temp_password');
+          localStorage.removeItem(TEMP_EMAIL_KEY);
+          localStorage.removeItem(TEMP_PASSWORD_KEY);
         }
       }
 
@@ -71,8 +74,8 @@ async function ensureUserAuthenticated(): Promise<any> {
       });
 
       // Store credentials before auth so a retry can reuse them
-      localStorage.setItem('shear_madness_temp_email', tempEmail);
-      localStorage.setItem('shear_madness_temp_password', tempPassword);
+      localStorage.setItem(TEMP_EMAIL_KEY, tempEmail);
+      localStorage.setItem(TEMP_PASSWORD_KEY, tempPassword);
 
       // Authenticate — retry up to 3 times on 429 with exponential backoff
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -367,6 +370,17 @@ export async function startMatch(matchId: string) {
     return mapMatchData(match);
   } catch (error) {
     console.error('Error starting match:', error);
+    throw error;
+  }
+}
+
+export async function stopMatch(matchId: string) {
+  try {
+    await ensureUserAuthenticated();
+    const match = await pb.collection('matches').update(matchId, { status: 'waiting' });
+    return mapMatchData(match);
+  } catch (error) {
+    console.error('Error stopping match:', error);
     throw error;
   }
 }
