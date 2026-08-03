@@ -41,9 +41,28 @@ export function Welcome() {
           <div className="w-[500px] max-w-[100vw]">
             <img
               src={logo}
-              alt="Tournament Logo"
+              alt="Shear Madness"
               className="w-full"
             />
+          </div>
+          {/* The logo renders the name as artwork, so the heading is
+              screen-reader-only to avoid showing the title twice. The name is
+              repeated as real text in the description below — Google's OAuth
+              homepage review needs the app name and purpose to be readable
+              text, not just pixels in an image. */}
+          <h1 className="sr-only">Shear Madness — Cornhole Tournament Manager</h1>
+          <div className="max-w-2xl text-center space-y-3 text-white">
+            <p className="text-lg leading-relaxed">
+              <span className="font-bold">Shear Madness</span> is a free tool for running Cornhole
+              tournaments. Create a tournament, share a QR code so players can sign up from their
+              phones, then run a single-elimination bracket that updates live on everyone's screen
+              as matches are played.
+            </p>
+            <p className="text-sm text-white/90 leading-relaxed">
+              Organizers can optionally connect Google Chat so the app sends each player a direct
+              message the moment their match is called. Players choose whether to take part by
+              adding an email address when they sign up.
+            </p>
           </div>
         </header>
         <div className="max-w-[300px] w-full space-y-6">
