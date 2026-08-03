@@ -3,8 +3,12 @@ import { Welcome } from "../welcome/welcome";
 
 export function meta({ }: Route.MetaArgs) {
   return [
-    { title: "Shear Madness" },
-    { name: "description", content: "Welcome to Shear Madness!" },
+    { title: "Shear Madness — Cornhole Tournament Manager" },
+    {
+      name: "description",
+      content:
+        "Run Cornhole tournaments with QR code player sign-ups and a live single-elimination bracket. Optionally notify players in Google Chat when their match starts.",
+    },
   ];
 }
 
