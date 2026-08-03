@@ -5,6 +5,12 @@
 /.local-pocketbase/
 /.env.development.local
 
+# Server-side secrets (Google OAuth client ID/secret) — never commit
+/.env
+/.env.local
+/*.apps.googleusercontent.com.json
+/client_secret*.json
+
 # React Router
 /.react-router/
 /build/

@@ -5,6 +5,7 @@ PB_VERSION="0.28.2"
 PB_DIR="/workspaces/shear-madness/.local-pocketbase"
 PB_DATA="$PB_DIR/pb_data"
 PB_BIN="$PB_DIR/pocketbase"
+PB_HOOKS="/workspaces/shear-madness/pb_hooks"
 SCHEMA_FILE="/workspaces/shear-madness/app/backend/pb_schema.json"
 ENV_FILE="/workspaces/shear-madness/.env.development.local"
 
@@ -13,6 +14,18 @@ ADMIN_PASSWORD="admin12345678"
 PB_URL="http://localhost:8090"
 
 mkdir -p "$PB_DATA"
+
+# Load server-side secrets (Google Chat OAuth) if present. `set -a` exports
+# everything defined in the file so the PocketBase process inherits it.
+# Anything already exported in the caller's environment takes precedence.
+SECRETS_FILE="/workspaces/shear-madness/.env"
+if [ -f "$SECRETS_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$SECRETS_FILE"
+  set +a
+  echo "Loaded server-side env from $SECRETS_FILE"
+fi
 
 # Download PocketBase binary if not already present
 if [ ! -f "$PB_BIN" ]; then
@@ -28,8 +41,10 @@ fi
 pkill -f "pocketbase serve.*8090" 2>/dev/null || true
 sleep 1
 
-# Start PocketBase in the background
-"$PB_BIN" serve --http=0.0.0.0:8090 --dir="$PB_DATA" > "$PB_DIR/pb.log" 2>&1 &
+# Start PocketBase in the background.
+# --hooksDir points at the repo's pb_hooks (Google Chat integration) rather than
+# the default location next to the gitignored local data dir.
+"$PB_BIN" serve --http=0.0.0.0:8090 --dir="$PB_DATA" --hooksDir="$PB_HOOKS" > "$PB_DIR/pb.log" 2>&1 &
 echo "PocketBase started (PID $!), log: $PB_DIR/pb.log"
 
 # Wait up to 30 seconds for PocketBase to be ready

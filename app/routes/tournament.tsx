@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { QRCodeCanvas } from 'qrcode.react';
 import { getTournament, getPlayersRealTime, getPlayers, startTournament, removePlayer } from "../backend/api";
+import GoogleChatSettings from "../components/GoogleChatSettings";
 
 export default function Tournament() {
   const [name, setName] = useState('');
@@ -57,6 +58,7 @@ export default function Tournament() {
               </p>
             )}
           </div>
+          {id && <GoogleChatSettings returnTo={`/tournament?id=${id}`} />}
           <div>
             <button
               onClick={handleStartTournament}

@@ -10,6 +10,7 @@ A real-time tournament management application for Cornhole competitions. Built w
 - 📱 **QR Code Sign-ups**: Generate QR codes for quick player registration
 - � **Real-time Updates**: Live bracket updates as matches progress using PocketBase real-time subscriptions
 - 🏆 **Tournament Brackets**: Visual bracket display showing match progression
+- 💬 **Google Chat Notifications**: Optionally DM players the moment their match starts — see [docs/google-chat-setup.md](docs/google-chat-setup.md)
 - 🔒 **TypeScript**: Full type safety throughout the application
 - � **TailwindCSS**: Modern, responsive styling
 - �️ **PocketBase Backend**: Lightweight, real-time database with built-in authentication

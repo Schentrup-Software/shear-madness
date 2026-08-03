@@ -24,7 +24,17 @@ RUN unzip /tmp/pb.zip -d /pb/
 # copy built frontend files
 COPY --from=build-env /app/build/client /pb/pb_public
 
+# server-side JS hooks (Google Chat OAuth routes + turn notifications)
+COPY pb_hooks /pb/pb_hooks
+
 EXPOSE 8080
+
+# Google Chat integration is optional — the feature stays hidden in the UI
+# unless GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET are provided at
+# runtime. APP_BASE_URL is used to build the OAuth redirect and player links.
+ENV GOOGLE_OAUTH_CLIENT_ID="" \
+    GOOGLE_OAUTH_CLIENT_SECRET="" \
+    APP_BASE_URL=""
 
 # start PocketBase
 CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8080"]

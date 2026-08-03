@@ -5,6 +5,7 @@ export default function Signup() {
   const [id, setId] = useState('');
   const [name, setName] = useState('');
   const [playerName, setPlayerName] = useState('');
+  const [chatEmail, setChatEmail] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -32,11 +33,17 @@ export default function Signup() {
       return;
     }
 
+    const trimmedEmail = chatEmail.trim();
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setErrorMessage('That does not look like a valid email address');
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage('');
 
     try {
-      const player = await addPlayer(id, playerName);
+      const player = await addPlayer(id, playerName, trimmedEmail);
       window.location.href = `/tournament/${player.id}/player`;
     } catch (error) {
       console.error("Failed to add player:", error);
@@ -79,6 +86,28 @@ export default function Signup() {
                 placeholder="Enter your name"
                 disabled={isSubmitting}
               />
+            </div>
+
+            <div>
+              <label
+                htmlFor="chatEmail"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2"
+              >
+                Google Chat email <span className="font-normal text-gray-500 dark:text-gray-400">(optional)</span>
+              </label>
+              <input
+                type="email"
+                id="chatEmail"
+                value={chatEmail}
+                onChange={(e) => setChatEmail(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
+                placeholder="you@company.com"
+                disabled={isSubmitting}
+              />
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Add it and you'll get a Google Chat message from the organizer when it's your
+                turn to play. Leave it blank to skip notifications.
+              </p>
             </div>
 
             <button
