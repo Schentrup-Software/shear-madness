@@ -139,7 +139,9 @@ export async function startTournament(tournamentId: string) {
 }
 
 // Function to add a player to a tournament
-export async function addPlayer(tournamentId: string, playerName: string) {
+// chatEmail is optional — supplying it opts the player in to Google Chat
+// "you're up next" DMs from the organizer.
+export async function addPlayer(tournamentId: string, playerName: string, chatEmail?: string) {
   try {
     // Ensure user is authenticated (create temp account if needed)
     const user = await ensureUserAuthenticated();
@@ -152,6 +154,7 @@ export async function addPlayer(tournamentId: string, playerName: string) {
         const player = await pb.collection('players').create({
           tournamentId,
           playerName,
+          chatEmail: chatEmail?.trim() ?? '',
           userId: user?.id,
         });
         return player;
@@ -394,6 +397,64 @@ export async function deleteAllMatches(tournamentId: string) {
   } catch (error) {
     console.error('Error deleting matches:', error);
     throw error;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Google Chat notifications
+//
+// These hit custom routes served by PocketBase (see /pb_hooks/googlechat.pb.js).
+// The OAuth client secret and the organizer's refresh token never leave the
+// server, so the browser only ever sees connection status.
+// ---------------------------------------------------------------------------
+
+export interface GoogleChatStatus {
+  /** Server has GOOGLE_OAUTH_CLIENT_ID / SECRET set. */
+  configured: boolean;
+  /** This organizer has authorized their Google account. */
+  connected: boolean;
+  googleEmail: string;
+}
+
+export async function getGoogleChatStatus(): Promise<GoogleChatStatus> {
+  try {
+    await ensureUserAuthenticated();
+    return await pb.send('/api/google-chat/status', { method: 'GET', requestKey: null });
+  } catch (error) {
+    console.error('Error fetching Google Chat status:', error);
+    // Treat an unreachable/older backend as "feature unavailable" rather than
+    // breaking the dashboard.
+    return { configured: false, connected: false, googleEmail: '' };
+  }
+}
+
+/** Returns the Google consent URL the browser should navigate to. */
+export async function getGoogleChatConnectUrl(returnTo: string): Promise<string> {
+  await ensureUserAuthenticated();
+  const res = await pb.send('/api/google-chat/connect', {
+    method: 'POST',
+    body: { returnTo },
+    requestKey: null,
+  });
+  return res.authUrl;
+}
+
+export async function disconnectGoogleChat() {
+  await ensureUserAuthenticated();
+  await pb.send('/api/google-chat/disconnect', { method: 'POST', requestKey: null });
+}
+
+export async function getMatchNotifications(tournamentId: string) {
+  try {
+    await ensureUserAuthenticated();
+    return await pb.collection('matchNotifications').getFullList({
+      filter: `tournamentId = "${tournamentId}"`,
+      sort: '-created',
+      requestKey: null,
+    });
+  } catch (error) {
+    console.error('Error fetching match notifications:', error);
+    return [];
   }
 }
 

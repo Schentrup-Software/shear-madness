@@ -38,7 +38,9 @@ app/
 │   ├── pocketbaseClient.ts    # PocketBase client init
 │   └── pb_schema.json   # PocketBase collection schema
 ├── components/
-│   └── Bracket.tsx      # Reusable bracket UI (used by organizer + player views)
+│   ├── Bracket.tsx      # Reusable bracket UI (used by organizer + player views)
+│   ├── GoogleChatSettings.tsx  # Organizer connects/disconnects Google Chat
+│   └── NotificationLog.tsx     # Chat DM delivery receipts
 ├── types/
 │   └── tournament.ts    # Shared TypeScript interfaces (Team, Match)
 └── welcome/
@@ -58,9 +60,22 @@ app/
 ## Data Model (PocketBase Collections)
 
 - `tournaments` — name, status (`signup` | `playing`), ownerId
-- `players` — playerName, tournamentId, userId
+- `players` — playerName, tournamentId, userId, chatEmail (optional Google Chat opt-in)
 - `matches` — round, team1[], team2[], winningTeam, tournamentId
 - `users` — temporary anonymous accounts (auto-created per session)
+- `googleChatCredentials`, `googleChatDmSpaces`, `googleChatOauthStates` — server-only, API rules locked
+- `matchNotifications` — DM delivery receipts, readable by the tournament owner
+
+## Server-side Hooks (`pb_hooks/`)
+
+PocketBase JS hooks provide the only server-side code in the app. `googlechat.pb.js`
+registers the `/api/google-chat/*` OAuth routes and the `matches` update hook that
+DMs players when a match goes active; `googlechat/lib.js` holds the shared logic.
+
+PocketBase runs each handler in an isolated runtime — handlers **cannot** close over
+outer-scope variables and must `require(`${__hooks}/googlechat/lib.js`)` instead.
+
+Setup and behaviour are documented in [docs/google-chat-setup.md](docs/google-chat-setup.md).
 
 ## Key Architectural Patterns
 

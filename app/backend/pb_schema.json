@@ -951,6 +951,20 @@
         "type": "text"
       },
       {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text9182736450",
+        "max": 0,
+        "min": 0,
+        "name": "chatEmail",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
         "cascadeDelete": false,
         "collectionId": "_pb_users_auth_",
         "hidden": false,
@@ -1086,6 +1100,451 @@
       }
     ],
     "indexes": [],
+    "system": false
+  },
+  {
+    "id": "gchat_creds_001",
+    "listRule": null,
+    "viewRule": null,
+    "createRule": null,
+    "updateRule": null,
+    "deleteRule": null,
+    "name": "googleChatCredentials",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "_pb_users_auth_",
+        "hidden": false,
+        "id": "relation1000000001",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "userId",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text1000000002",
+        "max": 0,
+        "min": 0,
+        "name": "googleEmail",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text1000000003",
+        "max": 0,
+        "min": 0,
+        "name": "refreshToken",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text1000000004",
+        "max": 0,
+        "min": 0,
+        "name": "accessToken",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "number1000000005",
+        "max": null,
+        "min": null,
+        "name": "accessTokenExpiry",
+        "onlyInt": true,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_gchat_creds_user` ON `googleChatCredentials` (`userId`)"
+    ],
+    "system": false
+  },
+  {
+    "id": "gchat_dmspaces1",
+    "listRule": null,
+    "viewRule": null,
+    "createRule": null,
+    "updateRule": null,
+    "deleteRule": null,
+    "name": "googleChatDmSpaces",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "gchat_creds_001",
+        "hidden": false,
+        "id": "relation2000000001",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "credentialId",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text2000000002",
+        "max": 0,
+        "min": 0,
+        "name": "playerEmail",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text2000000003",
+        "max": 0,
+        "min": 0,
+        "name": "spaceName",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_gchat_dmspace` ON `googleChatDmSpaces` (`credentialId`, `playerEmail`)"
+    ],
+    "system": false
+  },
+  {
+    "id": "gchat_states_01",
+    "listRule": null,
+    "viewRule": null,
+    "createRule": null,
+    "updateRule": null,
+    "deleteRule": null,
+    "name": "googleChatOauthStates",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text3000000001",
+        "max": 0,
+        "min": 0,
+        "name": "state",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "_pb_users_auth_",
+        "hidden": false,
+        "id": "relation3000000002",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "userId",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text3000000003",
+        "max": 0,
+        "min": 0,
+        "name": "returnTo",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_gchat_state` ON `googleChatOauthStates` (`state`)"
+    ],
+    "system": false
+  },
+  {
+    "id": "gchat_notiflog",
+    "listRule": "tournamentId.ownerId = @request.auth.id",
+    "viewRule": "tournamentId.ownerId = @request.auth.id",
+    "createRule": null,
+    "updateRule": null,
+    "deleteRule": null,
+    "name": "matchNotifications",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "pbc_340646327",
+        "hidden": false,
+        "id": "relation4000000001",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "tournamentId",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "pbc_2541054544",
+        "hidden": false,
+        "id": "relation4000000002",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "matchId",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "pbc_3072146508",
+        "hidden": false,
+        "id": "relation4000000003",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "playerId",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text4000000004",
+        "max": 0,
+        "min": 0,
+        "name": "playerName",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text4000000005",
+        "max": 0,
+        "min": 0,
+        "name": "chatEmail",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "select4000000006",
+        "maxSelect": 1,
+        "name": "status",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "sent",
+          "failed",
+          "skipped"
+        ]
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text4000000007",
+        "max": 0,
+        "min": 0,
+        "name": "detail",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE INDEX `idx_gchat_notif_match` ON `matchNotifications` (`matchId`)"
+    ],
     "system": false
   }
 ]

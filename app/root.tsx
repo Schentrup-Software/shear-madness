@@ -27,6 +27,24 @@ export const links: Route.LinksFunction = () => [
   { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
 ];
 
+/**
+ * Rendered on every page, including the error boundary. Uses a plain anchor
+ * rather than <Link> so it can't depend on router context being available —
+ * the same reason the rest of the app navigates with window.location.
+ */
+function Footer() {
+  return (
+    <footer className="py-6 px-4 text-center">
+      <a
+        href="/privacy"
+        className="text-sm text-white/80 hover:text-white underline underline-offset-4 transition-colors"
+      >
+        Privacy Policy
+      </a>
+    </footer>
+  );
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full">
@@ -36,8 +54,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body className="min-h-screen bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500">
-        {children}
+      {/* Flex column so the footer sits below the content on short pages
+          rather than floating mid-screen. */}
+      <body className="min-h-screen flex flex-col bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500">
+        <div className="flex-1">{children}</div>
+        <Footer />
         <ScrollRestoration />
         <Scripts />
       </body>

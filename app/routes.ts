@@ -7,4 +7,5 @@ export default [
   route("/tournament/:id/player", "routes/player.tsx"),
   route("/tournament/:id/bracket", "routes/tournamentBracket.tsx"),
   route("/tournament/:id/anthem", "routes/anthem.tsx"),
+  route("/privacy", "routes/privacy.tsx"),
 ] satisfies RouteConfig;

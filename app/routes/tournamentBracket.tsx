@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getTournament, getPlayers, updateMatch, getMatches, createMatch, startMatch, stopMatch } from "../backend/api";
 import Bracket from "../components/Bracket";
+import NotificationLog from "../components/NotificationLog";
 import type { Team, Match } from "../types/tournament";
 import { distributeTeams, collectRoundWinners, pairWinners, isRoundComplete } from "../utils/bracketLogic";
 
@@ -11,6 +12,7 @@ export default function TournamentBracket() {
     const [players, setPlayers] = useState<any[]>([]);
     const [matches, setMatches] = useState<Match[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [notificationRefresh, setNotificationRefresh] = useState(0);
 
     useEffect(() => {
         const path = window.location.pathname;
@@ -201,6 +203,8 @@ export default function TournamentBracket() {
     const handleStartMatch = async (matchId: string) => {
         const updated = await startMatch(matchId);
         setMatches(prev => prev.map(m => m.id === matchId ? { ...m, status: updated.status } : m));
+        // Starting a match is what triggers the Google Chat DMs server-side.
+        setNotificationRefresh(prev => prev + 1);
     };
 
     const handleStopMatch = async (matchId: string) => {
@@ -234,6 +238,8 @@ export default function TournamentBracket() {
                     </p>
                 </div>
             )}
+
+            {id && <NotificationLog tournamentId={id} refreshToken={notificationRefresh} />}
 
             {players.length > 0 && players.length < 4 && (
                 <div className="bg-yellow-100 dark:bg-yellow-900 rounded-lg shadow-lg p-6 text-center">
