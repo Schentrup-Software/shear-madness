@@ -69,8 +69,15 @@ app/
 ## Server-side Hooks (`pb_hooks/`)
 
 PocketBase JS hooks provide the only server-side code in the app. `googlechat.pb.js`
-registers the `/api/google-chat/*` OAuth routes and the `matches` update hook that
-DMs players when a match goes active; `googlechat/lib.js` holds the shared logic.
+registers the `/api/google-chat/*` OAuth routes plus the record hooks that DM players
+through the tournament; `googlechat/lib.js` holds the shared logic.
+
+Five message kinds, one per beat of the tournament (see `KIND` in `lib.js`):
+`tournament_start` (anthem call, to everyone), `on_deck` (next teams in bracket
+order, one match per board), `match_start` (you're up), `result` (congratulations
+/ condolences), `tournament_end` (champions, to everyone). Each row in
+`matchNotifications` records its kind, which is also what keeps the messages from
+suppressing one another — sends are idempotent per player *and* kind.
 
 PocketBase runs each handler in an isolated runtime — handlers **cannot** close over
 outer-scope variables and must `require(`${__hooks}/googlechat/lib.js`)` instead.

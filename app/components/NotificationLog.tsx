@@ -13,10 +13,20 @@ const STATUS_STYLES: Record<string, string> = {
   skipped: 'text-gray-500 dark:text-gray-400',
 };
 
+// Players get several messages about the same match, so each row says which
+// one it was. Rows written before the field existed fall back to "your turn".
+const KIND_LABELS: Record<string, string> = {
+  match_start: 'your turn',
+  on_deck: 'on deck',
+  result: 'result',
+  tournament_start: 'anthem',
+  tournament_end: 'champions',
+};
+
 /**
- * Delivery receipts for Google Chat "you're up" messages. Without this a failed
- * DM is invisible — the organizer would assume players were told when they
- * weren't. Hidden entirely when the feature was never used.
+ * Delivery receipts for the Google Chat messages sent through a tournament.
+ * Without this a failed DM is invisible — the organizer would assume players
+ * were told when they weren't. Hidden entirely when the feature was never used.
  */
 export default function NotificationLog({ tournamentId, refreshToken }: NotificationLogProps) {
   const [entries, setEntries] = useState<any[]>([]);
@@ -64,9 +74,10 @@ export default function NotificationLog({ tournamentId, refreshToken }: Notifica
               <div className="flex items-center justify-between gap-4">
                 <span className="text-gray-900 dark:text-gray-100">
                   {entry.playerName || '—'}
-                  {entry.chatEmail && (
-                    <span className="text-gray-500 dark:text-gray-400"> · {entry.chatEmail}</span>
-                  )}
+                  <span className="text-gray-500 dark:text-gray-400">
+                    {' · '}{KIND_LABELS[entry.kind] ?? KIND_LABELS.match_start}
+                    {entry.chatEmail && ` · ${entry.chatEmail}`}
+                  </span>
                 </span>
                 <span className={`font-medium ${STATUS_STYLES[entry.status] ?? ''}`}>
                   {entry.status}

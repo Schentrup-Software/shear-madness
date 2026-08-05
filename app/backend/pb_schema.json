@@ -1447,7 +1447,7 @@
         "minSelect": 0,
         "name": "matchId",
         "presentable": false,
-        "required": true,
+        "required": false,
         "system": false,
         "type": "relation"
       },
@@ -1491,6 +1491,23 @@
         "required": false,
         "system": false,
         "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "select4000000008",
+        "maxSelect": 1,
+        "name": "kind",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "select",
+        "values": [
+          "match_start",
+          "on_deck",
+          "result",
+          "tournament_start",
+          "tournament_end"
+        ]
       },
       {
         "hidden": false,
@@ -1543,7 +1560,8 @@
       }
     ],
     "indexes": [
-      "CREATE INDEX `idx_gchat_notif_match` ON `matchNotifications` (`matchId`)"
+      "CREATE INDEX `idx_gchat_notif_match` ON `matchNotifications` (`matchId`)",
+      "CREATE INDEX `idx_gchat_notif_tournament` ON `matchNotifications` (`tournamentId`, `kind`)"
     ],
     "system": false
   }

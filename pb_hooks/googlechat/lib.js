@@ -12,8 +12,10 @@
  *   1. The tournament organizer connects their Google account via OAuth
  *      (routes in ../googlechat.pb.js). We keep a refresh token.
  *   2. Players optionally supply a Google Chat email when they sign up.
- *   3. When the organizer starts a match, the record hook DMs each opted-in
- *      player *as the organizer* using the Chat API.
+ *   3. Record hooks DM each opted-in player *as the organizer* using the Chat
+ *      API at every beat of the tournament: the anthem when it starts, an
+ *      on-deck warning, the call to the board, the result of their match, and
+ *      the champions announcement at the end. See KIND below.
  */
 
 // Scopes: create the 1:1 DM space, post the message, and read the connected
@@ -355,20 +357,59 @@ function sendChatMessage(accessToken, spaceName, text) {
 // notification
 // ---------------------------------------------------------------------------
 
+/**
+ * Every DM we send is one of these. The kind is recorded on each
+ * matchNotifications row so one message never suppresses another: a team can
+ * be told they're on deck, then that they're up, then how it went — all for
+ * the same match.
+ */
+const KIND = {
+  MATCH_START: 'match_start',
+  ON_DECK: 'on_deck',
+  RESULT: 'result',
+  TOURNAMENT_START: 'tournament_start',
+  TOURNAMENT_END: 'tournament_end',
+};
+
+/** Filter + params matching one player's rows of a single kind. */
+function notificationScope(base, playerId) {
+  const params = { kind: base.kind || KIND.MATCH_START };
+  const clauses = ['kind = {:kind}'];
+
+  // Tournament-wide messages (anthem, champions) have no match of their own.
+  if (base.matchId) {
+    clauses.push('matchId = {:mid}');
+    params.mid = base.matchId;
+  } else {
+    clauses.push('tournamentId = {:tid} && matchId = ""');
+    params.tid = base.tournamentId;
+  }
+
+  if (playerId) {
+    clauses.push('playerId = {:pid}');
+    params.pid = playerId;
+  } else {
+    clauses.push('playerId = ""');
+  }
+
+  return { filter: clauses.join(' && '), params: params };
+}
+
 function logNotification(entry) {
-  // Replace any earlier non-delivered attempt for this match/player, so a
-  // stop/start cycle updates the outcome instead of stacking duplicate rows.
+  const kind = entry.kind || KIND.MATCH_START;
+
+  // Replace any earlier non-delivered attempt of the same kind for this
+  // match/player, so a stop/start cycle updates the outcome instead of
+  // stacking duplicate rows.
   try {
-    const byPlayer = !!entry.playerId;
+    const scope = notificationScope(entry, entry.playerId);
     const prior = $app.findRecordsByFilter(
       'matchNotifications',
-      byPlayer
-        ? 'matchId = {:mid} && playerId = {:pid} && status != "sent"'
-        : 'matchId = {:mid} && playerId = "" && status != "sent"',
+      scope.filter + ' && status != "sent"',
       '',
       50,
       0,
-      byPlayer ? { mid: entry.matchId, pid: entry.playerId } : { mid: entry.matchId }
+      scope.params
     );
     for (let i = 0; i < prior.length; i++) {
       $app.delete(prior[i]);
@@ -380,16 +421,23 @@ function logNotification(entry) {
   try {
     const rec = newRecord('matchNotifications');
     rec.set('tournamentId', entry.tournamentId);
-    rec.set('matchId', entry.matchId);
+    if (entry.matchId) rec.set('matchId', entry.matchId);
     if (entry.playerId) rec.set('playerId', entry.playerId);
     rec.set('playerName', entry.playerName || '');
     rec.set('chatEmail', entry.chatEmail || '');
+    rec.set('kind', kind);
     rec.set('status', entry.status);
     rec.set('detail', (entry.detail || '').slice(0, 500));
     $app.save(rec);
   } catch (err) {
     $app.logger().error('Failed to write matchNotifications row', 'error', String(err));
   }
+}
+
+/** Has this exact message already reached this player? */
+function alreadySent(base, playerId) {
+  const scope = notificationScope(base, playerId);
+  return !!findOne('matchNotifications', scope.filter + ' && status = "sent"', scope.params);
 }
 
 function teamLabel(players) {
@@ -411,9 +459,122 @@ function loadPlayers(ids) {
   return out;
 }
 
+/** Both halves of a match, with player records and display labels resolved. */
+function matchSides(match) {
+  const team1 = loadPlayers(toArray(match.get('team1')));
+  const team2 = loadPlayers(toArray(match.get('team2')));
+  const label1 = teamLabel(team1);
+  const label2 = teamLabel(team2);
+
+  return [
+    { players: team1, own: label1, opponent: label2 },
+    { players: team2, own: label2, opponent: label1 },
+  ];
+}
+
+/**
+ * A tournament's matches in the order the bracket draws them: rounds left to
+ * right, and within a round top to bottom — which is creation order, the same
+ * order the UI lists them in.
+ */
+function bracketOrder(tournamentId) {
+  const ordered = [];
+  try {
+    const found = $app.findRecordsByFilter(
+      'matches',
+      'tournamentId = {:tid}',
+      'round,created',
+      500,
+      0,
+      { tid: tournamentId }
+    );
+    for (let i = 0; i < found.length; i++) {
+      ordered.push(found[i]);
+    }
+  } catch (err) {
+    // no matches yet, or the tournament is gone
+  }
+  return ordered;
+}
+
+function allPlayers(tournamentId) {
+  const players = [];
+  try {
+    const found = $app.findRecordsByFilter(
+      'players',
+      'tournamentId = {:tid}',
+      'created',
+      500,
+      0,
+      { tid: tournamentId }
+    );
+    for (let i = 0; i < found.length; i++) {
+      players.push(found[i]);
+    }
+  } catch (err) {
+    // nobody signed up
+  }
+  return players;
+}
+
+/**
+ * The next teams due to play, reading the bracket top to bottom, left to
+ * right. Byes are skipped — there is nothing for them to warm up for.
+ */
+function upcomingMatches(ordered, limit) {
+  const next = [];
+  for (let i = 0; i < ordered.length && next.length < limit; i++) {
+    const match = ordered[i];
+    if (String(match.get('status')) !== 'waiting') continue;
+    if (!toArray(match.get('team2')).length) continue;
+    next.push(match);
+  }
+  return next;
+}
+
+/** Name a round the way the bracket labels it: "the Finals", "Round 2". */
+function roundPhrase(ordered, match) {
+  const round = Number(match.get('round'));
+  let maxRound = 0;
+  let inRound = 0;
+
+  for (let i = 0; i < ordered.length; i++) {
+    const r = Number(ordered[i].get('round'));
+    if (r > maxRound) maxRound = r;
+    if (r === round) inRound++;
+  }
+
+  if (round === maxRound && inRound === 1) return 'the Finals';
+  if (round === maxRound - 1 && inRound === 2) return 'the Semi-Finals';
+  return 'Round ' + round;
+}
+
+/** The last match standing — winning it wins the tournament. */
+function isFinalMatch(ordered, match) {
+  const round = Number(match.get('round'));
+  let maxRound = 0;
+  let inRound = 0;
+
+  for (let i = 0; i < ordered.length; i++) {
+    const r = Number(ordered[i].get('round'));
+    if (r > maxRound) maxRound = r;
+    if (r === round) inRound++;
+  }
+
+  return round === maxRound && inRound === 1;
+}
+
+function sentenceCase(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+// ---------------------------------------------------------------------------
+// message copy
+// ---------------------------------------------------------------------------
+
 function buildMessage(opts) {
   const lines = [
-    "🌽 *You're up!* Round " + opts.round + ' of *' + opts.tournamentName + '* is starting now.',
+    "*You're up!* " + sentenceCase(opts.roundPhrase) + ' of *' + opts.tournamentName + '* is starting now.',
     '',
     opts.ownTeam + '  vs  ' + opts.opponentTeam,
     '',
@@ -425,25 +586,82 @@ function buildMessage(opts) {
   return lines.join('\n');
 }
 
-/**
- * Entry point for the `matches` update hook. Never throws: a Chat failure must
- * not stop a tournament from running, so everything is recorded to
- * matchNotifications and surfaced in the organizer dashboard instead.
- */
-function notifyMatchStarted(match) {
-  const tournamentId = String(match.get('tournamentId') || '');
-  if (!tournamentId) return;
+function buildOnDeckMessage(opts) {
+  const lines = [
+    '⏳ *On deck!* You play next in ' + opts.roundPhrase + ' of *' + opts.tournamentName + '*.',
+  ];
+  if (opts.playerUrl) {
+    lines.push(opts.playerUrl);
+  }
+  return lines.join('\n');
+}
 
+function buildResultMessage(opts) {
+  const lines = opts.won
+    ? [
+      '🎉 *Winner winner!* ' + opts.ownTeam + ' take ' + opts.roundPhrase + ' over ' + opts.opponentTeam + '. 🏆',
+      '',
+      'Great throwing — catch your breath, the next round is coming.',
+    ]
+    : [
+      '💙 *Tough one.* ' + opts.opponentTeam + ' edged out ' + opts.ownTeam + ' in ' + opts.roundPhrase + '.',
+      '',
+      'Our condolences — you played it well. Stick around, grab a drink and cheer the rest of the bracket on.',
+    ];
+  if (opts.playerUrl) {
+    lines.push('');
+    lines.push(opts.playerUrl);
+  }
+  return lines.join('\n');
+}
+
+function buildTournamentStartMessage(opts) {
+  const lines = [
+    '🇺🇸 *Please rise!* *' + opts.tournamentName + '* is officially underway. 🇺🇸',
+    '',
+    'Gather at the boards and join every other team in singing the national anthem before the first bag flies.',
+  ];
+  if (opts.anthemUrl) {
+    lines.push('');
+    lines.push('🎵 Sing along here: ' + opts.anthemUrl);
+  }
+  return lines.join('\n');
+}
+
+function buildChampionsMessage(opts) {
+  const lines = [
+    '🎉🎊🏆 *WE HAVE CHAMPIONS!* 🏆🎊🎉',
+    '',
+    '🥇 *' + opts.champions + '* 🥇',
+    'are your *' + opts.tournamentName + '* champions!',
+    '',
+    '🥈 Runner-up: ' + opts.runnerUp + ' — what a final. 👏',
+    '',
+    '🎆🎈 Every toss, every slide, every airmail — thank you all for playing! 🎈🎆',
+    '🙌 Give it up for every team in the bracket. See you at the next one! 🎯🎉',
+  ];
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// delivery
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve everything a send needs — the tournament, the organizer's stored
+ * credentials and a usable access token. Returns null (recording why against
+ * `base`) when the feature is off, unconnected, or the token can't be
+ * refreshed, so a caller can simply bail out.
+ */
+function openSession(base) {
   let tournament;
   try {
-    tournament = $app.findRecordById('tournaments', tournamentId);
+    tournament = $app.findRecordById('tournaments', base.tournamentId);
   } catch (err) {
-    return;
+    return null; // tournament vanished — nothing to announce
   }
 
   const cfg = config();
-  const base = { tournamentId: tournamentId, matchId: match.id };
-
   if (!cfg.configured) {
     logNotification(
       Object.assign({}, base, {
@@ -451,7 +669,7 @@ function notifyMatchStarted(match) {
         detail: 'Google OAuth is not configured on this server.',
       })
     );
-    return;
+    return null;
   }
 
   const credRecord = findOne('googleChatCredentials', 'userId = {:uid}', {
@@ -464,7 +682,7 @@ function notifyMatchStarted(match) {
         detail: 'Organizer has not connected Google Chat.',
       })
     );
-    return;
+    return null;
   }
 
   let accessToken;
@@ -472,76 +690,262 @@ function notifyMatchStarted(match) {
     accessToken = getAccessToken(credRecord);
   } catch (err) {
     logNotification(Object.assign({}, base, { status: 'failed', detail: String(err) }));
-    return;
+    return null;
   }
 
-  const team1 = loadPlayers(toArray(match.get('team1')));
-  const team2 = loadPlayers(toArray(match.get('team2')));
-  const team1Label = teamLabel(team1);
-  const team2Label = teamLabel(team2);
+  return {
+    tournament: tournament,
+    cfg: cfg,
+    credRecord: credRecord,
+    accessToken: accessToken,
+    tournamentName: tournament.get('name') || 'the tournament',
+  };
+}
 
-  const sides = [
-    { players: team1, own: team1Label, opponent: team2Label },
-    { players: team2, own: team2Label, opponent: team1Label },
-  ];
+function playerLink(session, player) {
+  return session.cfg.appBaseUrl
+    ? session.cfg.appBaseUrl + '/tournament/' + player.id + '/player'
+    : '';
+}
 
-  for (let s = 0; s < sides.length; s++) {
-    const side = sides[s];
-    for (let i = 0; i < side.players.length; i++) {
-      const player = side.players[i];
+/**
+ * DM each `{ player, text }` target, recording an outcome row per player.
+ * Never throws — a Chat failure must not stop a tournament from running, so
+ * problems land in matchNotifications and surface in the organizer dashboard.
+ */
+function deliver(session, base, targets) {
+  for (let i = 0; i < targets.length; i++) {
+    const player = targets[i].player;
 
-      // Per-player idempotency: a double click or a stop/start cycle must not
-      // DM anyone twice, but a player whose earlier send failed still gets
-      // retried — which a match-wide guard would wrongly skip.
-      const priorSend = findOne(
-        'matchNotifications',
-        'matchId = {:mid} && playerId = {:pid} && status = "sent"',
-        { mid: match.id, pid: player.id }
+    // Per-player, per-kind idempotency: a double click or a stop/start cycle
+    // must not DM anyone the same thing twice, but a player whose earlier send
+    // failed still gets retried — which a match-wide guard would wrongly skip.
+    if (alreadySent(base, player.id)) continue;
+
+    const email = String(player.get('chatEmail') || '').trim();
+    const entry = Object.assign({}, base, {
+      playerId: player.id,
+      playerName: player.get('playerName') || '',
+      chatEmail: email,
+    });
+
+    if (!email) {
+      logNotification(
+        Object.assign({}, entry, {
+          status: 'skipped',
+          detail: 'No Google Chat email provided at signup.',
+        })
       );
-      if (priorSend) continue;
+      continue;
+    }
 
-      const email = String(player.get('chatEmail') || '').trim();
-      const entry = Object.assign({}, base, {
-        playerId: player.id,
-        playerName: player.get('playerName') || '',
-        chatEmail: email,
-      });
-
-      if (!email) {
-        logNotification(
-          Object.assign({}, entry, {
-            status: 'skipped',
-            detail: 'No Google Chat email provided at signup.',
-          })
-        );
-        continue;
-      }
-
-      try {
-        const spaceName = resolveDmSpace(accessToken, credRecord, email);
-        sendChatMessage(
-          accessToken,
-          spaceName,
-          buildMessage({
-            round: match.get('round'),
-            tournamentName: tournament.get('name') || 'the tournament',
-            ownTeam: side.own,
-            opponentTeam: side.opponent,
-            playerUrl: cfg.appBaseUrl
-              ? cfg.appBaseUrl + '/tournament/' + player.id + '/player'
-              : '',
-          })
-        );
-        logNotification(Object.assign({}, entry, { status: 'sent', detail: '' }));
-      } catch (err) {
-        logNotification(Object.assign({}, entry, { status: 'failed', detail: String(err) }));
-      }
+    try {
+      const spaceName = resolveDmSpace(session.accessToken, session.credRecord, email);
+      sendChatMessage(session.accessToken, spaceName, targets[i].text);
+      logNotification(Object.assign({}, entry, { status: 'sent', detail: '' }));
+    } catch (err) {
+      logNotification(Object.assign({}, entry, { status: 'failed', detail: String(err) }));
     }
   }
 }
 
+// ---------------------------------------------------------------------------
+// notifications
+// ---------------------------------------------------------------------------
+
+/** "Your match is starting now" — to the four players in the match. */
+function sendMatchStart(session, match, ordered) {
+  const base = {
+    tournamentId: session.tournament.id,
+    matchId: match.id,
+    kind: KIND.MATCH_START,
+  };
+  const sides = matchSides(match);
+  const targets = [];
+
+  for (let s = 0; s < sides.length; s++) {
+    for (let i = 0; i < sides[s].players.length; i++) {
+      const player = sides[s].players[i];
+      targets.push({
+        player: player,
+        text: buildMessage({
+          roundPhrase: roundPhrase(ordered, match),
+          tournamentName: session.tournamentName,
+          ownTeam: sides[s].own,
+          opponentTeam: sides[s].opponent,
+          playerUrl: playerLink(session, player),
+        }),
+      });
+    }
+  }
+
+  deliver(session, base, targets);
+}
+
+/**
+ * "You're up next" — to the teams whose matches sit at the top of the queue,
+ * one per board, so exactly the teams who could be called up get a heads-up.
+ */
+function sendOnDeck(session, ordered) {
+  const boards = Math.max(1, Number(session.tournament.get('boardCount') || 1));
+  const upcoming = upcomingMatches(ordered, boards);
+
+  for (let m = 0; m < upcoming.length; m++) {
+    const match = upcoming[m];
+    const base = {
+      tournamentId: session.tournament.id,
+      matchId: match.id,
+      kind: KIND.ON_DECK,
+    };
+    const sides = matchSides(match);
+    const targets = [];
+
+    for (let s = 0; s < sides.length; s++) {
+      for (let i = 0; i < sides[s].players.length; i++) {
+        const player = sides[s].players[i];
+        targets.push({
+          player: player,
+          text: buildOnDeckMessage({
+            roundPhrase: roundPhrase(ordered, match),
+            tournamentName: session.tournamentName,
+            ownTeam: sides[s].own,
+            opponentTeam: sides[s].opponent,
+            playerUrl: playerLink(session, player),
+          }),
+        });
+      }
+    }
+
+    deliver(session, base, targets);
+  }
+}
+
+/** Congratulations to the winners, condolences to the losers. */
+function sendResult(session, match, ordered) {
+  const base = {
+    tournamentId: session.tournament.id,
+    matchId: match.id,
+    kind: KIND.RESULT,
+  };
+  const sides = matchSides(match);
+  const winningTeam = Number(match.get('winningTeam') || 0);
+  const targets = [];
+
+  for (let s = 0; s < sides.length; s++) {
+    const won = winningTeam === s + 1;
+    for (let i = 0; i < sides[s].players.length; i++) {
+      const player = sides[s].players[i];
+      targets.push({
+        player: player,
+        text: buildResultMessage({
+          won: won,
+          roundPhrase: roundPhrase(ordered, match),
+          ownTeam: sides[s].own,
+          opponentTeam: sides[s].opponent,
+          playerUrl: playerLink(session, player),
+        }),
+      });
+    }
+  }
+
+  deliver(session, base, targets);
+}
+
+/** The closing ceremony — every player in the tournament hears about it. */
+function sendChampions(session, finalMatch) {
+  const base = {
+    tournamentId: session.tournament.id,
+    matchId: finalMatch.id,
+    kind: KIND.TOURNAMENT_END,
+  };
+  const sides = matchSides(finalMatch);
+  const winningTeam = Number(finalMatch.get('winningTeam') || 0);
+  const champions = winningTeam === 2 ? sides[1] : sides[0];
+  const runnerUp = winningTeam === 2 ? sides[0] : sides[1];
+
+  const text = buildChampionsMessage({
+    champions: champions.own,
+    runnerUp: runnerUp.own,
+    tournamentName: session.tournamentName,
+  });
+
+  const players = allPlayers(session.tournament.id);
+  const targets = [];
+  for (let i = 0; i < players.length; i++) {
+    targets.push({ player: players[i], text: text });
+  }
+
+  deliver(session, base, targets);
+}
+
+/**
+ * Entry point for the waiting -> active transition on `matches`: tell the
+ * players who are up, and warn whoever is next in the queue.
+ */
+function notifyMatchActivated(match) {
+  const tournamentId = String(match.get('tournamentId') || '');
+  if (!tournamentId) return;
+
+  const session = openSession({
+    tournamentId: tournamentId,
+    matchId: match.id,
+    kind: KIND.MATCH_START,
+  });
+  if (!session) return;
+
+  const ordered = bracketOrder(tournamentId);
+  sendMatchStart(session, match, ordered);
+  sendOnDeck(session, ordered);
+}
+
+/**
+ * Entry point for a match gaining a winner: results to both teams, plus the
+ * closing celebration when the match that just ended was the final.
+ */
+function notifyMatchDecided(match) {
+  const tournamentId = String(match.get('tournamentId') || '');
+  if (!tournamentId) return;
+
+  const session = openSession({
+    tournamentId: tournamentId,
+    matchId: match.id,
+    kind: KIND.RESULT,
+  });
+  if (!session) return;
+
+  const ordered = bracketOrder(tournamentId);
+  sendResult(session, match, ordered);
+
+  if (isFinalMatch(ordered, match)) {
+    sendChampions(session, match);
+  }
+}
+
+/** Entry point for signup -> playing on `tournaments`: anthem time. */
+function notifyTournamentStarted(tournament) {
+  const base = { tournamentId: tournament.id, kind: KIND.TOURNAMENT_START };
+  const session = openSession(base);
+  if (!session) return;
+
+  const text = buildTournamentStartMessage({
+    tournamentName: session.tournamentName,
+    anthemUrl: session.cfg.appBaseUrl
+      ? session.cfg.appBaseUrl + '/tournament/' + tournament.id + '/anthem'
+      : '',
+  });
+
+  const players = allPlayers(tournament.id);
+  const targets = [];
+  for (let i = 0; i < players.length; i++) {
+    targets.push({ player: players[i], text: text });
+  }
+
+  deliver(session, base, targets);
+}
+
 module.exports = {
   SCOPES: SCOPES,
+  KIND: KIND,
   config: config,
   findOne: findOne,
   buildAuthUrl: buildAuthUrl,
@@ -552,6 +956,12 @@ module.exports = {
   getAccessToken: getAccessToken,
   resolveDmSpace: resolveDmSpace,
   sendChatMessage: sendChatMessage,
-  notifyMatchStarted: notifyMatchStarted,
+  notifyMatchActivated: notifyMatchActivated,
+  notifyMatchDecided: notifyMatchDecided,
+  notifyTournamentStarted: notifyTournamentStarted,
   buildMessage: buildMessage,
+  buildOnDeckMessage: buildOnDeckMessage,
+  buildResultMessage: buildResultMessage,
+  buildTournamentStartMessage: buildTournamentStartMessage,
+  buildChampionsMessage: buildChampionsMessage,
 };

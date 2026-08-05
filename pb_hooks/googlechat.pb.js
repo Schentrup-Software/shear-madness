@@ -9,7 +9,41 @@
  */
 
 // ---------------------------------------------------------------------------
-// Notify players when their match goes live
+// Notify players as their match goes live and again when it is decided
+// ---------------------------------------------------------------------------
+
+onRecordAfterUpdateSuccess((e) => {
+  e.next();
+
+  // A notification problem must never break running a tournament — and one
+  // failed announcement must not swallow the next.
+  const safely = (label, fn) => {
+    try {
+      fn();
+    } catch (err) {
+      $app.logger().error('Google Chat notification failed', 'stage', label, 'error', String(err));
+    }
+  };
+
+  safely('match', () => {
+    const gchat = require(`${__hooks}/googlechat/lib.js`);
+    const previous = e.record.original();
+
+    // Only the waiting -> active transition means "your turn".
+    if (e.record.get('status') === 'active' && previous.get('status') !== 'active') {
+      safely('activated', () => gchat.notifyMatchActivated(e.record));
+    }
+
+    // Picking a winner both ends the match and, in the finals, the tournament.
+    const winner = Number(e.record.get('winningTeam') || 0);
+    if (winner && winner !== Number(previous.get('winningTeam') || 0)) {
+      safely('decided', () => gchat.notifyMatchDecided(e.record));
+    }
+  });
+}, 'matches');
+
+// ---------------------------------------------------------------------------
+// Call everyone together for the national anthem when the tournament starts
 // ---------------------------------------------------------------------------
 
 onRecordAfterUpdateSuccess((e) => {
@@ -19,16 +53,14 @@ onRecordAfterUpdateSuccess((e) => {
     const previous = e.record.original().get('status');
     const current = e.record.get('status');
 
-    // Only the waiting -> active transition means "your turn".
-    if (current !== 'active' || previous === 'active') return;
+    if (current !== 'playing' || previous === 'playing') return;
 
     const gchat = require(`${__hooks}/googlechat/lib.js`);
-    gchat.notifyMatchStarted(e.record);
+    gchat.notifyTournamentStarted(e.record);
   } catch (err) {
-    // A notification problem must never break starting a match.
-    $app.logger().error('Google Chat notification failed', 'error', String(err));
+    $app.logger().error('Google Chat anthem notification failed', 'error', String(err));
   }
-}, 'matches');
+}, 'tournaments');
 
 // ---------------------------------------------------------------------------
 // GET /api/google-chat/status — is the server configured, is this user connected
